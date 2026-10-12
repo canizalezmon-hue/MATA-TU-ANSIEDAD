@@ -2,7 +2,11 @@
 // 1. Variables Globales, API y Cookies
 // ==========================================
 let TASA_BCV = 36.50; 
-const NUMERO_LIDER_WHATSAPP = "584120000000"; 
+const NUMERO_LIDER_WHATSAPP = "584122317676"; 
+
+// 🔥 API DE GOOGLE SHEETS 🔥
+const GOOGLE_SHEETS_API = "https://script.google.com/macros/s/AKfycby-Fdc74UV1FnoemPVOFCw-qeB0a5kI1X57QwQVdzW6wGiYoTWRQvtSZ0IwfeHXxS_H/exec";
+
 let carrito = [];
 
 function setCookie(name, value, days) {
@@ -26,6 +30,20 @@ function getCookie(name) {
 }
 function eraseCookie(name) { document.cookie = name +'=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;'; }
 
+// Función puente para enviar datos a Google Sheets de forma invisible
+function enviarDatosGoogle(datos) {
+    const formData = new URLSearchParams();
+    for (const key in datos) {
+        formData.append(key, datos[key]);
+    }
+    fetch(GOOGLE_SHEETS_API, {
+        method: 'POST',
+        body: formData,
+        mode: 'no-cors' 
+    }).then(() => console.log("☁️ Datos sincronizados con Google Sheets"))
+      .catch(e => console.error("Error sincronizando con Sheets", e));
+}
+
 let usuarioActivo = getCookie('mta_session_user'); 
 let datosUsuario = JSON.parse(getCookie('mta_session_data')) || {};
 let correoGuardado = getCookie('mta_remember_email') || ""; 
@@ -38,7 +56,7 @@ let datosTemporales = {};
 let temporizadorOTP = null;
 let productoEnEdicionId = null;
 
-// Base de Datos Global
+// Base de Datos Local
 const catalogoBase = [
     { id: 1, nombre: "Chocolate Savoy", precio: 1.00, stock: 20, img: "https://images.unsplash.com/photo-1549007994-cb92caebd54b?w=200", cat: "Dulce" },
     { id: 2, nombre: "Cri Cri Pequeño", precio: 1.20, stock: 15, img: "https://images.unsplash.com/photo-1614088685112-0a760b71a3c8?w=200", cat: "Dulce" },
@@ -176,7 +194,18 @@ window.procesarAuth = () => {
             if (codeInput !== codigoGeneradoOTP) return showToast("🔒 Código incorrecto. Genera otro.");
 
             localStorage.setItem(`acc_${datosTemporales.correo}`, JSON.stringify(datosTemporales));
-            showToast("🎉 Cuenta creada. Inicia sesión.");
+            
+            // 🌟 ENVIAR NUEVO USUARIO A GOOGLE SHEETS
+            enviarDatosGoogle({
+                action: 'registrarCliente',
+                nombres: datosTemporales.nombres,
+                apellidos: datosTemporales.apellidos,
+                area: datosTemporales.area,
+                telefono: datosTemporales.telefono,
+                correo: datosTemporales.correo
+            });
+
+            showToast("🎉 Cuenta creada y sincronizada con éxito.");
             cambiarTabAuth('login'); 
         }
         return;
@@ -498,6 +527,16 @@ window.finalizarCompra = () => {
     ordenesGlobales.unshift(nuevaFacturaGlobal);
     localStorage.setItem('mta_global_orders', JSON.stringify(ordenesGlobales));
 
+    // 🌟 ENVIAR DEUDA Y DESGLOSE A GOOGLE SHEETS PARA LA MATRIZ
+    if (m === 'credito') {
+        enviarDatosGoogle({
+            action: 'nuevaCompra',
+            correo: usuarioActivo,
+            totalUsd: totalCobrarUsd,
+            detalles: JSON.stringify(carrito) // <-- ESTO ENVÍA EL DETALLE DE LOS PRODUCTOS Y CANTIDADES
+        });
+    }
+
     generarTicketHTML(n, a, u, m, totalCobrarUsd, totalCobrarBs, carrito);
     
     let txt = `🍬 *MATA TU ANSIEDAD - NUEVO PEDIDO*%0A%0A`;
@@ -535,7 +574,7 @@ function generarTicketHTML(nom, ape, ubi, metodo, tUsd, tBs, itemsTicket) {
 }
 
 // ==========================================
-// 7. Panel de Administrador Profesional (Crear, Editar, Eliminar)
+// 7. Panel de Administrador Profesional
 // ==========================================
 window.abrirPanelAdmin = () => {
     const dropdown = document.getElementById('user-dropdown');
@@ -622,7 +661,6 @@ window.eliminarProductoAdmin = (id) => {
     }
 };
 
-// COMPRESOR DE IMÁGENES
 window.actualizarTextoFoto = (input, origen, idMsg, idOtherInput) => {
     const msg = document.getElementById(idMsg);
     if(input.files && input.files[0]) {
@@ -854,7 +892,14 @@ window.toggleAdminStatus = (id, tipo) => {
     let order = ordenesGlobales.find(o => o.id === id);
     if(order) {
         if(tipo === 'entrega') order.entregado = !order.entregado;
-        if(tipo === 'pago') order.pagado = !order.pagado;
+        if(tipo === 'pago') {
+            order.pagado = !order.pagado;
+            // 🌟 SI EL ADMIN MARCA PAGADO, LIMPIA LA DEUDA EN GOOGLE SHEETS
+            if(order.pagado) {
+                enviarDatosGoogle({ action: 'marcarPagado', correo: order.correo });
+            }
+        }
+        
         localStorage.setItem('mta_global_orders', JSON.stringify(ordenesGlobales));
         showToast("Estado actualizado correctamente 🔄");
         renderAdminPedidos();

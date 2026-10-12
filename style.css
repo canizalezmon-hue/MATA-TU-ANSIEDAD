@@ -24,14 +24,12 @@ body { background-color: var(--bg-color); color: var(--text-main); }
 .input-form:focus { border-color: var(--primary); box-shadow: 0 0 5px rgba(244, 114, 182, 0.2); }
 .input-form:disabled { background: #f5f5f5; color: #888; cursor: not-allowed; }
 
-/* Autenticación */
 .auth-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-color); z-index: 2000; display: flex; justify-content: center; align-items: center; }
 .auth-box { background: var(--white); padding: 40px; border-radius: 20px; box-shadow: 0 10px 25px rgba(244, 114, 182, 0.15); width: 90%; max-width: 450px; text-align: center; }
 .auth-tabs { display: flex; border-bottom: 2px solid var(--border); margin-bottom: 20px; }
 .tab-btn { flex: 1; padding: 10px; background: none; border: none; font-size: 1rem; color: var(--text-sub); cursor: pointer; font-weight: bold; border-bottom: 3px solid transparent; transition: 0.3s; }
 .tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); }
 
-/* Navbar y BCV */
 .navbar { display: flex; justify-content: space-between; align-items: center; background: var(--white); padding: 15px 5%; box-shadow: 0 4px 6px rgba(0,0,0,0.05); position: sticky; top: 0; z-index: 100; flex-wrap: wrap; gap: 10px;}
 .logo { font-size: 1.5rem; font-weight: 900; color: var(--primary); cursor: pointer; }
 .bcv-info { background: #E0F2FE; color: #0284C7; padding: 8px 15px; border-radius: 20px; font-weight: bold; font-size: 0.9rem; border: 1px solid #BAE6FD; }
@@ -41,13 +39,11 @@ body { background-color: var(--bg-color); color: var(--text-main); }
 .cart-icon { font-size: 1.2rem; cursor: pointer; font-weight: bold; transition: 0.3s; }
 .cart-icon:hover { transform: scale(1.1); }
 
-/* Menú Clic */
 .dropdown-content { display: none; position: absolute; right: 40px; top: 40px; background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); min-width: 180px; box-shadow: 0px 8px 20px rgba(0,0,0,0.1); border-radius: 12px; z-index: 1; overflow: hidden; border: 1px solid rgba(244, 114, 182, 0.2); }
 .dropdown-content a { color: var(--text-main); padding: 12px 16px; text-decoration: none; display: block; font-size: 0.9rem; font-weight: bold; border-bottom: 1px solid #f1f1f1; transition: 0.3s; }
 .dropdown-content a:hover { background-color: var(--bg-color); color: var(--primary); padding-left: 20px; }
 .show-dropdown { display: block !important; animation: slideDown 0.2s ease-out; }
 
-/* Estilos Profesionales Admin (Floating Labels, Cards) */
 .animate-entry { animation: slideUpFade 0.4s ease-out; }
 .modern-card { background: #fff; border-radius: 15px; padding: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.04); border-top: 5px solid var(--primary); }
 .modern-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
@@ -58,12 +54,10 @@ body { background-color: var(--bg-color); color: var(--text-main); }
 .input-group label { position: absolute; top: 15px; left: 15px; color: #999; font-size: 1rem; transition: 0.3s; pointer-events: none; }
 .input-group input:focus + label, .input-group input:valid + label { top: -8px; left: 10px; font-size: 0.75rem; background: #fff; padding: 0 5px; color: var(--primary); font-weight: bold; }
 
-/* File Drop Area */
 .file-drop-area { border: 2px dashed var(--primary); border-radius: 12px; text-align: center; background: #FDF2F8; cursor: pointer; transition: 0.3s; display: flex; align-items: center; justify-content: center; }
 .file-drop-area:hover { background: #FCE7F3; transform: scale(1.02); }
 .file-drop-area .file-msg { color: var(--primary-hover); font-weight: 800; display: flex; flex-direction: column; gap: 5px; }
 
-/* Grid de Productos */
 .section-title { margin-bottom: 20px; color: var(--primary-hover); }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 20px; }
 .product-card { background: var(--white); padding: 15px; border-radius: 12px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.02); transition: 0.3s; position: relative; }
@@ -77,7 +71,6 @@ body { background-color: var(--bg-color); color: var(--text-main); }
 .agotado { opacity: 0.6; pointer-events: none; }
 .badge-agotado { position: absolute; top: 10px; right: 10px; background: #EF4444; color: white; padding: 3px 8px; border-radius: 5px; font-size: 0.7rem; font-weight: bold; }
 
-/* Modales y Zoom */
 .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); backdrop-filter: blur(5px); z-index: 3000; justify-content: center; align-items: center; }
 .modal-content { background: var(--white); width: 90%; max-width: 500px; margin: 5% auto; padding: 25px; border-radius: 15px; position: relative; max-height: 90vh; overflow-y: auto; animation: slideUpFade 0.3s ease-out; }
 .close { position: absolute; top: 15px; right: 20px; font-size: 1.5rem; cursor: pointer; color: #999; transition: 0.3s; }
@@ -88,7 +81,6 @@ body { background-color: var(--bg-color); color: var(--text-main); }
 .img-zoom { width: 100%; max-height: 250px; object-fit: contain; transition: transform 0.4s ease; cursor: zoom-in; }
 .img-zoom-container:hover .img-zoom { transform: scale(1.5); }
 
-/* Carrito y Sugerencias */
 .cart-item { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding: 10px 0; }
 .qty-controls { display: flex; align-items: center; gap: 10px; }
 .qty-btn { background: #eee; border: none; width: 25px; height: 25px; border-radius: 5px; cursor: pointer; font-weight: bold; transition: 0.2s;}
@@ -99,33 +91,28 @@ body { background-color: var(--bg-color); color: var(--text-main); }
 .sug-card:hover { transform: translateY(-3px); box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
 .sug-card img { width: 50px; height: 50px; object-fit: contain; }
 
-/* Checkout */
 .checkout-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px; }
 @media (max-width: 768px) { .checkout-grid { grid-template-columns: 1fr; } }
 .checkout-box { background: var(--white); padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.02); }
 .total-row { display: flex; justify-content: space-between; margin-top: 10px; font-size: 1.1rem; }
 .total-final { font-weight: 900; font-size: 1.3rem; color: var(--primary); border-top: 2px dashed #ddd; padding-top: 10px; }
 
-/* Facturas */
 .ticket-fiscal { max-width: 350px; font-family: 'Courier New', Courier, monospace; text-align: center; background: #fff; padding: 30px 20px; box-shadow: 0 0 20px rgba(0,0,0,0.15); border-radius: 10px; }
 .ticket-table { width: 100%; text-align: left; margin: 15px 0; font-size: 0.85rem; border-collapse: collapse; }
 .ticket-table th, .ticket-table td { border-bottom: 1px dashed #ccc; padding: 8px 0; }
 .historial-item { background: #f9f9f9; padding: 15px; border-radius: 8px; margin-bottom: 10px; font-size: 0.85rem; border-left: 4px solid var(--primary); position: relative;}
 
-/* Badges Estado */
 .badge-estado { padding: 4px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: bold; display: inline-block; margin-top: 5px; margin-right: 5px; }
 .badge-verde { background-color: #D1FAE5; color: #065F46; border: 1px solid #34D399; }
 .badge-rojo { background-color: #FEE2E2; color: #991B1B; border: 1px solid #F87171; }
 .badge-gris { background-color: #F3F4F6; color: #374151; border: 1px solid #D1D5DB; }
 
-/* Tabla Admin */
 .admin-table { width: 100%; border-collapse: collapse; text-align: left; }
 .admin-table th, .admin-table td { padding: 15px 12px; border-bottom: 1px solid #eee; vertical-align: middle; }
 .admin-table tr:hover { background: #fafafa; }
 .admin-input-table { border: 1px solid #ccc; border-radius: 5px; padding: 5px; width: 70px; text-align: center; outline: none; transition: 0.3s; }
 .admin-input-table:focus { border-color: var(--primary); box-shadow: 0 0 5px rgba(244, 114, 182, 0.2); }
 
-/* Toasts y Keyframes */
 #toast-container { position: fixed; top: 60px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 10px; }
 .toast { background: var(--primary); color: white; padding: 15px 25px; border-radius: 8px; box-shadow: 0 4px 15px rgba(244, 114, 182, 0.3); animation: slideIn 0.3s; font-weight: bold; font-size: 1.1rem; }
 @keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
