@@ -11,7 +11,7 @@ let carrito = [];
 let usuariosDeLaNube = []; 
 let productos = [];
 let deudasGlobales = []; 
-let pagosGlobales = []; // 🔥 NUEVO: Para guardar los pagos de la nube
+let pagosGlobales = [];
 
 function setCookie(name, value, days) {
     let expires = "";
@@ -84,7 +84,7 @@ window.onload = async () => {
         
         if(dataNube.clientes) usuariosDeLaNube = dataNube.clientes;
         if(dataNube.deudas) deudasGlobales = dataNube.deudas; 
-        if(dataNube.pagos) pagosGlobales = dataNube.pagos; // 🔥 Carga los pagos
+        if(dataNube.pagos) pagosGlobales = dataNube.pagos; 
         
     } catch(e) {
         console.error("Error crítico al cargar desde Google Drive:", e);
@@ -264,11 +264,7 @@ window.procesarAuth = async () => {
 
     const cuentaNube = usuariosDeLaNube.find(usr => usr.correo === u);
     if (!cuentaNube) return showToast("❌ Usuario no existe. Regístrate en la pestaña 'Registrarse'.");
-    
-    if (cuentaNube.estado === 'Bloqueado') {
-        return showToast(`🚫 TU CUENTA ESTÁ BLOQUEADA.<br><br>Motivo: ${cuentaNube.motivo}`);
-    }
-
+    if (cuentaNube.estado === 'Bloqueado') return showToast(`🚫 TU CUENTA ESTÁ BLOQUEADA.<br><br>Motivo: ${cuentaNube.motivo}`);
     if (!cuentaNube.clave) return showToast("⚠️ Tu cuenta requiere una contraseña nueva. Usa la opción '¿Olvidaste tu contraseña?'");
     if (cuentaNube.clave !== p) return showToast("🔒 Contraseña incorrecta");
 
@@ -504,7 +500,7 @@ window.cambiarSeccionAdmin = (seccion) => {
     if(seccion === 'pedidos') renderAdminPedidos(); 
     if(seccion === 'usuarios') renderAdminUsuarios();
     if(seccion === 'deudas') renderAdminDeudas(); 
-    if(seccion === 'reportes') renderAdminReportes(); // 🔥 LLAMA LA NUEVA SECCIÓN
+    if(seccion === 'reportes') renderAdminReportes(); 
     if(seccion === 'config') renderAdminConfig();
 };
 
@@ -580,7 +576,7 @@ window.guardarEdicionAdmin = async () => {
 };
 
 // ==========================================
-// 8. Panel de Usuarios, Deudas y Reportes
+// 8. Panel de Usuarios y Deudas
 // ==========================================
 function renderAdminUsuarios() {
     const list = document.getElementById('admin-users-list'); list.innerHTML = '';
@@ -616,41 +612,6 @@ function renderAdminDeudas() {
         </tr>`;
     });
 }
-
-// 🔥 NUEVO: RENDERIZAR REPORTES Y EXPORTAR A CSV 🔥
-function renderAdminReportes() {
-    const list = document.getElementById('admin-reportes-list'); list.innerHTML = '';
-    if (pagosGlobales.length === 0) { list.innerHTML = `<tr><td colspan="3" style="text-align:center;">Aún no hay pagos registrados en la nube.</td></tr>`; return; }
-    
-    pagosGlobales.forEach(p => {
-        let fechaLimpia = new Date(p.fecha).toLocaleDateString('es-VE');
-        list.innerHTML += `<tr>
-            <td><strong>${fechaLimpia}</strong></td>
-            <td><strong>${p.nombre}</strong><br><span style="font-size:0.75rem; color:#666;">${p.correo}</span></td>
-            <td><strong>$${p.monto.toFixed(2)} USD</strong></td>
-        </tr>`;
-    });
-}
-
-window.descargarPagosCSV = () => {
-    if(pagosGlobales.length === 0) return showToast("No hay pagos para exportar.");
-    
-    // El '\uFEFF' es necesario para que Excel lea las tildes y caracteres especiales correctamente
-    let csvContent = "data:text/csv;charset=utf-8,\uFEFFFecha,Correo,Nombre,Monto Pagado USD\n";
-    
-    pagosGlobales.forEach(p => {
-        let fechaF = new Date(p.fecha).toLocaleDateString('es-VE');
-        csvContent += `${fechaF},${p.correo},${p.nombre},${p.monto}\n`;
-    });
-    
-    var encodedUri = encodeURI(csvContent);
-    var link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `Reporte_Pagos_MTA_${new Date().toLocaleDateString('es-VE').replace(/\//g,'-')}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-};
 
 window.saldarDeudaAdmin = async (correo) => {
     if(confirm("¿Estás seguro de perdonar/saldar esta deuda? Esto la pondrá en $0 en la base de datos de forma permanente.")) {
@@ -694,9 +655,107 @@ window.eliminarUsuarioAdmin = async (correo) => {
         showToast("⏳ Eliminando usuario en la Nube...");
         await enviarDatosGoogle({ action: 'eliminarCliente', correo: correo });
         usuariosDeLaNube = usuariosDeLaNube.filter(u => u.correo !== correo);
-        showToast("🗑️ Usuario borrado. Si no debía dinero, también se eliminó de la matriz.");
+        showToast("🗑️ Usuario borrado.");
         renderAdminUsuarios();
     }
+};
+
+// ==========================================
+// 8.B REPORTES CSV (NUEVO)
+// ==========================================
+function renderAdminReportes() {
+    const list = document.getElementById('admin-reportes-list'); list.innerHTML = '';
+    
+    let fInicioStr = document.getElementById('reporte-inicio').value;
+    let fFinStr = document.getElementById('reporte-fin').value;
+    
+    let filtrados = pagosGlobales;
+    
+    if (fInicioStr && fFinStr) {
+        let dInicio = new Date(fInicioStr + "T00:00:00");
+        let dFin = new Date(fFinStr + "T23:59:59");
+        filtrados = pagosGlobales.filter(p => {
+            let d = new Date(p.fecha);
+            return d >= dInicio && d <= dFin;
+        });
+    }
+
+    if (filtrados.length === 0) { list.innerHTML = `<tr><td colspan="3" style="text-align:center;">No hay pagos registrados en este rango de fechas.</td></tr>`; return; }
+    
+    filtrados.sort((a,b) => new Date(b.fecha) - new Date(a.fecha));
+
+    filtrados.forEach(p => {
+        let fechaLimpia = new Date(p.fecha).toLocaleDateString('es-VE');
+        list.innerHTML += `<tr>
+            <td><strong>${fechaLimpia}</strong></td>
+            <td><strong>${p.nombre}</strong><br><span style="font-size:0.75rem; color:#666;">${p.correo}</span></td>
+            <td><strong>$${p.monto.toFixed(2)} USD</strong></td>
+        </tr>`;
+    });
+}
+
+window.descargarPagosCSV = () => {
+    let fInicioStr = document.getElementById('reporte-inicio').value;
+    let fFinStr = document.getElementById('reporte-fin').value;
+    
+    let filtrados = pagosGlobales;
+    
+    if (fInicioStr && fFinStr) {
+        let dInicio = new Date(fInicioStr + "T00:00:00");
+        let dFin = new Date(fFinStr + "T23:59:59");
+        filtrados = pagosGlobales.filter(p => { let d = new Date(p.fecha); return d >= dInicio && d <= dFin; });
+    }
+
+    if(filtrados.length === 0) return showToast("No hay pagos para exportar en estas fechas.");
+    
+    // 1. Ordenar alfabéticamente por nombre
+    filtrados.sort((a, b) => a.nombre.localeCompare(b.nombre));
+
+    // 2. Agrupar por usuario
+    let agrupados = {};
+    filtrados.forEach(p => {
+        if(!agrupados[p.correo]) agrupados[p.correo] = { nombre: p.nombre, pagos: [], totalUsd: 0 };
+        agrupados[p.correo].pagos.push(p);
+        agrupados[p.correo].totalUsd += p.monto;
+    });
+
+    // 3. Crear el formato para Excel (usamos Punto y Coma para separar las columnas correctamente en Latinoamérica)
+    let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
+    csvContent += "FECHA;CORREO;NOMBRE DEL CLIENTE;MONTO (USD);MONTO ESTIMADO (BS)\n";
+    
+    let granTotalUsd = 0;
+    
+    for (let correo in agrupados) {
+        let usr = agrupados[correo];
+        
+        // Pagos individuales del usuario
+        usr.pagos.forEach(p => {
+            let fechaF = new Date(p.fecha).toLocaleDateString('es-VE');
+            let montoBs = (p.monto * TASA_BCV).toFixed(2);
+            csvContent += `${fechaF};${p.correo};${p.nombre};${p.monto.toFixed(2)};${montoBs}\n`;
+        });
+        
+        // Fila de Total por Usuario
+        let totalUsd = usr.totalUsd;
+        let totalBs = (totalUsd * TASA_BCV).toFixed(2);
+        granTotalUsd += totalUsd;
+        
+        csvContent += `;;TOTAL DE ${usr.nombre.toUpperCase()};${totalUsd.toFixed(2)};${totalBs}\n`;
+        csvContent += `;;;;\n`; // Espacio en blanco para separar del siguiente usuario
+    }
+    
+    // Fila del Gran Total Final
+    let granTotalBs = (granTotalUsd * TASA_BCV).toFixed(2);
+    csvContent += `;;GRAN TOTAL RECAUDADO;${granTotalUsd.toFixed(2)};${granTotalBs}\n`;
+
+    // 4. Descargar
+    var encodedUri = encodeURI(csvContent);
+    var link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `Reporte_Contable_MTA_${fInicioStr || 'Todo'}_al_${fFinStr || 'Todo'}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
 };
 
 // ==========================================
