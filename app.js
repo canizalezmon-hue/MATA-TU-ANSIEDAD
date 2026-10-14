@@ -10,6 +10,7 @@ const GOOGLE_SHEETS_API = "https://script.google.com/macros/s/AKfycby-Fdc74UV1Fn
 let carrito = [];
 let usuariosDeLaNube = []; 
 let productos = [];
+let deudasGlobales = []; // 🔥 NUEVO: Para guardar las deudas
 
 function setCookie(name, value, days) {
     let expires = "";
@@ -63,8 +64,6 @@ let ordenesGlobales = JSON.parse(localStorage.getItem('mta_global_orders')) || [
 let diasCobroGlobales = JSON.parse(localStorage.getItem('mta_dias_cobro')) || [15, 30]; 
 let categoriasMTA = JSON.parse(localStorage.getItem('mta_categorias')) || ['Dulce', 'Salado'];
 
-const catalogoBase = [];
-
 // ==========================================
 // 2. Inicialización
 // ==========================================
@@ -75,17 +74,13 @@ window.onload = async () => {
         const dataNube = await respuesta.json();
         
         if(dataNube.inventario && dataNube.inventario.length > 0) {
-            let unicos = [];
-            let map = new Map();
-            for (let item of dataNube.inventario) {
-                if(!map.has(item.id)){ map.set(item.id, true); unicos.push(item); }
-            }
+            let unicos = []; let map = new Map();
+            for (let item of dataNube.inventario) { if(!map.has(item.id)){ map.set(item.id, true); unicos.push(item); } }
             productos = unicos; 
-        } else {
-            productos = []; 
-        }
+        } else { productos = []; }
         
         if(dataNube.clientes) usuariosDeLaNube = dataNube.clientes;
+        if(dataNube.deudas) deudasGlobales = dataNube.deudas; // Carga las deudas de la Matriz
         
     } catch(e) {
         console.error("Error crítico al cargar desde Google Drive:", e);
@@ -98,7 +93,6 @@ window.onload = async () => {
     verificarExpiracionSesion();
 
     if (usuarioActivo) {
-        // 🔥 VALIDACIÓN: Si al cargar la página resulta que lo bloquearon 🔥
         let usuarioVerificado = usuariosDeLaNube.find(u => u.correo === usuarioActivo);
         if(usuarioVerificado && usuarioVerificado.estado === 'Bloqueado') {
             showToast(`🚫 TU CUENTA FUE BLOQUEADA.<br>Motivo: ${usuarioVerificado.motivo}`);
@@ -188,9 +182,7 @@ window.completarDominio = (dominio) => {
     if (val !== "") {
         emailInput.value = val + dominio;
         document.getElementById('auth-password').focus(); 
-    } else {
-        showToast("⚠️ Escribe tu nombre de usuario primero");
-    }
+    } else { showToast("⚠️ Escribe tu nombre de usuario primero"); }
 };
 
 window.iniciarRecuperacion = () => {
@@ -199,45 +191,29 @@ window.iniciarRecuperacion = () => {
 
     const existeEnNube = usuariosDeLaNube.find(usr => usr.correo === u);
     if (!existeEnNube) return showToast("❌ Ese correo no está registrado en el sistema.");
-
-    // 🔥 VALIDACIÓN: No dejar recuperar clave a bloqueados
-    if (existeEnNube.estado === 'Bloqueado') {
-        return showToast(`🚫 NO PUEDES RECUPERAR. TU CUENTA ESTÁ BLOQUEADA.<br>Motivo: ${existeEnNube.motivo}`);
-    }
+    if (existeEnNube.estado === 'Bloqueado') return showToast(`🚫 NO PUEDES RECUPERAR. TU CUENTA ESTÁ BLOQUEADA.<br>Motivo: ${existeEnNube.motivo}`);
 
     const nuevaPwd = prompt("Ingresa la NUEVA contraseña que deseas (mínimo 4 caracteres):");
     if (!nuevaPwd || nuevaPwd.trim().length < 4) return showToast("⚠️ Operación cancelada o contraseña muy corta.");
 
-    modoRecuperacion = true;
-    pasoVerificacion = true;
-    datosTemporales = { correo: u, clave: nuevaPwd.trim() }; 
+    modoRecuperacion = true; pasoVerificacion = true; datosTemporales = { correo: u, clave: nuevaPwd.trim() }; 
 
-    document.getElementById('password-area').style.display = 'none';
-    document.getElementById('remember-area').style.display = 'none';
-    document.getElementById('auth-email').style.display = 'none';
-    document.getElementById('email-shortcuts').style.display = 'none';
-    document.getElementById('verification-area').style.display = 'block';
-    document.getElementById('btn-auth-action').innerText = "Verificar Código de Cambio";
-
+    document.getElementById('password-area').style.display = 'none'; document.getElementById('remember-area').style.display = 'none'; document.getElementById('auth-email').style.display = 'none'; document.getElementById('email-shortcuts').style.display = 'none'; document.getElementById('verification-area').style.display = 'block'; document.getElementById('btn-auth-action').innerText = "Verificar Código de Cambio";
     generarYMostrarCodigoOTP();
 };
 
 window.generarYMostrarCodigoOTP = () => {
     codigoGeneradoOTP = Math.floor(100000 + Math.random() * 900000).toString();
-    const cont = document.getElementById('toast-container');
-    const t = document.createElement('div'); t.className = 'toast'; 
+    const cont = document.getElementById('toast-container'); const t = document.createElement('div'); t.className = 'toast'; 
     t.innerHTML = `📱 CÓDIGO MTA DE VERIFICACIÓN: <strong style="font-size:1.3rem;">${codigoGeneradoOTP}</strong><br><small style="font-weight:normal;">Desaparecerá en 10 segundos</small>`;
-    cont.appendChild(t); 
-    if (temporizadorOTP) clearTimeout(temporizadorOTP);
-    temporizadorOTP = setTimeout(() => { t.remove(); }, 10000); 
+    cont.appendChild(t); if (temporizadorOTP) clearTimeout(temporizadorOTP); temporizadorOTP = setTimeout(() => { t.remove(); }, 10000); 
 };
 
 window.procesarAuth = async () => {
     const btn = document.getElementById('btn-auth-action');
     const u = document.getElementById('auth-email').value.trim().toLowerCase(); 
     const p = document.getElementById('auth-password').value.trim();
-    const checkEl = document.getElementById('remember-me');
-    const remember = checkEl ? checkEl.checked : false;
+    const checkEl = document.getElementById('remember-me'); const remember = checkEl ? checkEl.checked : false;
 
     if (modoRecuperacion) {
         const codeInput = document.getElementById('auth-code').value.trim();
@@ -247,9 +223,7 @@ window.procesarAuth = async () => {
         const usr = usuariosDeLaNube.find(usr => usr.correo === datosTemporales.correo);
         if(usr) usr.clave = datosTemporales.clave;
         btn.innerText = "Entrar"; btn.style.pointerEvents = "auto";
-        showToast("✅ Contraseña actualizada exitosamente. Inicia sesión.");
-        cambiarTabAuth('login');
-        return;
+        showToast("✅ Contraseña actualizada exitosamente. Inicia sesión."); cambiarTabAuth('login'); return;
     }
 
     if (modoRegistro) {
@@ -284,12 +258,7 @@ window.procesarAuth = async () => {
 
     const cuentaNube = usuariosDeLaNube.find(usr => usr.correo === u);
     if (!cuentaNube) return showToast("❌ Usuario no existe. Regístrate en la pestaña 'Registrarse'.");
-    
-    // 🔥 VALIDACIÓN DE BLOQUEO AL INICIAR SESIÓN 🔥
-    if (cuentaNube.estado === 'Bloqueado') {
-        return showToast(`🚫 TU CUENTA ESTÁ BLOQUEADA.<br><br>Motivo: ${cuentaNube.motivo}`);
-    }
-
+    if (cuentaNube.estado === 'Bloqueado') return showToast(`🚫 TU CUENTA ESTÁ BLOQUEADA.<br><br>Motivo: ${cuentaNube.motivo}`);
     if (!cuentaNube.clave) return showToast("⚠️ Tu cuenta requiere una contraseña nueva. Usa la opción '¿Olvidaste tu contraseña?'");
     if (cuentaNube.clave !== p) return showToast("🔒 Contraseña incorrecta");
 
@@ -342,7 +311,6 @@ window.abrirPerfil = () => {
     else {
         misFacturas.forEach(f => {
             let bsActualizado = f.totalUsd * TASA_BCV;
-            
             let estadoHTML = "";
             if (f.cancelado) {
                 estadoHTML = `<span class="badge-estado badge-rojo" style="display:block; margin-top:5px; white-space:normal;">🚫 CANCELADO: ${f.motivoCancelacion}</span>`;
@@ -517,13 +485,15 @@ window.abrirPanelAdmin = () => {
 window.cambiarSeccionAdmin = (seccion) => {
     document.getElementById('admin-seccion-inventario').style.display = seccion === 'inventario' ? 'block' : 'none';
     document.getElementById('admin-seccion-pedidos').style.display = seccion === 'pedidos' ? 'block' : 'none';
-    document.getElementById('admin-seccion-config').style.display = seccion === 'config' ? 'block' : 'none';
     document.getElementById('admin-seccion-usuarios').style.display = seccion === 'usuarios' ? 'block' : 'none';
+    document.getElementById('admin-seccion-deudas').style.display = seccion === 'deudas' ? 'block' : 'none';
+    document.getElementById('admin-seccion-config').style.display = seccion === 'config' ? 'block' : 'none';
     
     if(seccion === 'inventario') renderAdminInventario(); 
     if(seccion === 'pedidos') renderAdminPedidos(); 
-    if(seccion === 'config') renderAdminConfig();
     if(seccion === 'usuarios') renderAdminUsuarios();
+    if(seccion === 'deudas') renderAdminDeudas(); // 🔥 LLAMA A LA NUEVA FUNCIÓN 🔥
+    if(seccion === 'config') renderAdminConfig();
 };
 
 function renderAdminInventario() {
@@ -598,7 +568,7 @@ window.guardarEdicionAdmin = async () => {
 };
 
 // ==========================================
-// 8. Panel de Usuarios (NUEVO)
+// 8. Panel de Usuarios y Deudas (NUEVO)
 // ==========================================
 function renderAdminUsuarios() {
     const list = document.getElementById('admin-users-list'); list.innerHTML = '';
@@ -606,9 +576,7 @@ function renderAdminUsuarios() {
     
     usuariosDeLaNube.forEach(u => {
         if(u.correo === 'administrador@matatuansiedad.com') return; 
-        
         let estadoBadge = u.estado === 'Bloqueado' ? `<span class="badge-estado badge-rojo" style="display:block; text-align:center;">🚫 Bloqueado<br><small style="font-weight:normal;">${u.motivo}</small></span>` : `<span class="badge-estado badge-verde">✅ Activo</span>`;
-        
         let btnBloquear = u.estado === 'Bloqueado' 
             ? `<button type="button" class="btn-primary" style="background:#10B981; padding:5px 10px; font-size:0.75rem; width:120px; margin-bottom:5px;" onclick="desbloquearUsuarioAdmin('${u.correo}')">✅ Desbloquear</button>`
             : `<button type="button" class="btn-primary" style="background:#F59E0B; padding:5px 10px; font-size:0.75rem; width:120px; margin-bottom:5px;" onclick="bloquearUsuarioAdmin('${u.correo}')">⚠️ Bloquear</button>`;
@@ -617,13 +585,46 @@ function renderAdminUsuarios() {
             <td><strong>${u.nombres} ${u.apellidos}</strong><br><span style="font-size:0.75rem; color:#666;">${u.correo}</span></td>
             <td><strong>${u.telefono}</strong><br><span style="font-size:0.8rem; color:var(--primary);">${u.area}</span></td>
             <td style="text-align:center;">${estadoBadge}</td>
+            <td style="text-align:center;">${btnBloquear}<br><button type="button" class="btn-primary" style="background:#EF4444; padding:5px 10px; font-size:0.75rem; width:120px;" onclick="eliminarUsuarioAdmin('${u.correo}')">🗑️ Eliminar</button></td>
+        </tr>`;
+    });
+}
+
+// 🔥 NUEVA FUNCIÓN: RENDERIZAR DEUDAS 🔥
+function renderAdminDeudas() {
+    const list = document.getElementById('admin-deudas-list'); list.innerHTML = '';
+    const deudores = deudasGlobales.filter(d => d.total > 0); // Filtra los que deben más de 0
+
+    if (deudores.length === 0) { list.innerHTML = `<tr><td colspan="3" style="text-align:center;">No hay clientes con deudas pendientes. ¡Excelente!</td></tr>`; return; }
+    
+    deudores.forEach(d => {
+        let bsActualizado = d.total * TASA_BCV; 
+        list.innerHTML += `<tr>
+            <td><strong>${d.nombre}</strong><br><span style="font-size:0.75rem; color:#666;">${d.correo}</span></td>
+            <td><strong>$${d.total.toFixed(2)}</strong><br><span style="font-size:0.8rem; color:var(--text-sub);">${bsActualizado.toFixed(2)} Bs</span></td>
             <td style="text-align:center;">
-                ${btnBloquear}<br>
-                <button type="button" class="btn-primary" style="background:#EF4444; padding:5px 10px; font-size:0.75rem; width:120px;" onclick="eliminarUsuarioAdmin('${u.correo}')">🗑️ Eliminar</button>
+                <button type="button" class="btn-primary" style="background:#10B981; padding:5px 10px; font-size:0.75rem; width:120px;" onclick="saldarDeudaAdmin('${d.correo}')">✅ Saldar Deuda</button>
             </td>
         </tr>`;
     });
 }
+
+// 🔥 NUEVA FUNCIÓN: SALDAR DEUDA 🔥
+window.saldarDeudaAdmin = async (correo) => {
+    if(confirm("¿Estás seguro de perdonar/saldar esta deuda? Esto la pondrá en $0 en la base de datos de forma permanente.")) {
+        showToast("⏳ Procesando el pago en la Nube...");
+        await enviarDatosGoogle({ action: 'marcarPagado', correo: correo });
+        
+        let deuda = deudasGlobales.find(d => d.correo === correo);
+        if(deuda) deuda.total = 0;
+        
+        ordenesGlobales.forEach(o => { if (o.correo === correo && o.metodo === 'credito') o.pagado = true; });
+        localStorage.setItem('mta_global_orders', JSON.stringify(ordenesGlobales));
+        
+        showToast("✅ Deuda saldada correctamente.");
+        renderAdminDeudas();
+    }
+};
 
 window.bloquearUsuarioAdmin = async (correo) => {
     let motivo = prompt("Indica el motivo del bloqueo (Ej: Debe dinero, Facturas pendientes):");

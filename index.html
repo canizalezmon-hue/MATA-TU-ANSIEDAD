@@ -115,8 +115,9 @@
             <div style="display:flex; gap:10px; flex-wrap: wrap;">
                 <button class="btn-primary" style="padding:8px 15px; font-size:0.9rem;" onclick="cambiarSeccionAdmin('inventario')">📦 Inventario</button>
                 <button class="btn-primary" style="padding:8px 15px; font-size:0.9rem; background:#3B82F6;" onclick="cambiarSeccionAdmin('pedidos')">🧾 Pedidos</button>
-                <!-- 🔥 NUEVO BOTÓN DE USUARIOS 🔥 -->
                 <button class="btn-primary" style="padding:8px 15px; font-size:0.9rem; background:#10B981;" onclick="cambiarSeccionAdmin('usuarios')">👥 Usuarios</button>
+                <!-- 🔥 NUEVO BOTÓN DE DEUDAS 🔥 -->
+                <button class="btn-primary" style="padding:8px 15px; font-size:0.9rem; background:#F59E0B;" onclick="cambiarSeccionAdmin('deudas')">💰 Deudas</button>
                 <button class="btn-primary" style="padding:8px 15px; font-size:0.9rem; background:#8B5CF6;" onclick="cambiarSeccionAdmin('config')">⚙️ Ajustes</button>
             </div>
         </div>
@@ -171,12 +172,21 @@
             </div>
         </div>
 
-        <!-- 🔥 NUEVA PESTAÑA DE USUARIOS 🔥 -->
         <div id="admin-seccion-usuarios" style="display:none;">
             <div class="checkout-box animate-entry" style="overflow-x: auto; padding:0;">
                 <table class="admin-table">
                     <thead style="background: #10B981; color: white;"><tr><th>Usuario</th><th>Contacto / Área</th><th>Estado</th><th style="text-align:center;">Acciones</th></tr></thead>
                     <tbody id="admin-users-list"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- 🔥 NUEVA PESTAÑA DE DEUDAS 🔥 -->
+        <div id="admin-seccion-deudas" style="display:none;">
+            <div class="checkout-box animate-entry" style="overflow-x: auto; padding:0;">
+                <table class="admin-table">
+                    <thead style="background: #F59E0B; color: white;"><tr><th>Cliente</th><th>Deuda Acumulada</th><th style="text-align:center;">Acción</th></tr></thead>
+                    <tbody id="admin-deudas-list"></tbody>
                 </table>
             </div>
         </div>
