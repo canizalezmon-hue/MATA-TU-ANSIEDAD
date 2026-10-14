@@ -7,17 +7,19 @@
     <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
     
+    <!-- 🔥 NUEVO: Estilos para la barra de categorías deslizable 🔥 -->
     <style>
-        /* Estilos de la barra de categorías dinámica */
         .category-bar {
             display: flex;
             gap: 10px;
             overflow-x: auto;
             padding-bottom: 10px;
             margin-bottom: 20px;
-            scrollbar-width: none; 
+            scrollbar-width: none; /* Oculta scroll en Firefox */
         }
-        .category-bar::-webkit-scrollbar { display: none; }
+        .category-bar::-webkit-scrollbar {
+            display: none; /* Oculta scroll en Chrome/Safari */
+        }
         .cat-btn {
             background: #f3f4f6;
             border: 1px solid #ddd;
@@ -36,28 +38,6 @@
             color: white;
             border-color: var(--primary);
             box-shadow: 0 4px 6px rgba(236, 72, 153, 0.3);
-        }
-
-        /* 🔥 NUEVO: ESTILOS DE LOS ESQUELETOS DE CARGA 🔥 */
-        .skeleton-card {
-            background: #fff;
-            border-radius: 12px;
-            padding: 15px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            animation: pulse 1.5s infinite ease-in-out;
-        }
-        .skeleton-img { width: 100%; height: 120px; background: #e2e8f0; border-radius: 8px; }
-        .skeleton-title { width: 70%; height: 20px; background: #e2e8f0; border-radius: 4px; margin: 5px auto; }
-        .skeleton-price { width: 40%; height: 15px; background: #e2e8f0; border-radius: 4px; margin: 0 auto; }
-        .skeleton-btn-load { width: 100%; height: 35px; background: #e2e8f0; border-radius: 20px; margin-top: 10px; }
-
-        @keyframes pulse {
-            0% { opacity: 0.5; }
-            50% { opacity: 1; }
-            100% { opacity: 0.5; }
         }
     </style>
 </head>
@@ -135,6 +115,7 @@
 
     <div id="store-content" class="container" style="display: none;">
         
+        <!-- 🔥 NUEVO: BARRA DE CATEGORÍAS 🔥 -->
         <div id="category-filters" class="category-bar">
             <!-- Se llena dinámicamente con JavaScript -->
         </div>
@@ -182,7 +163,6 @@
             </div>
         </div>
         
-        <!-- Resto del panel admin (sin cambios, lo pego para que reemplaces todo igual) -->
         <div id="admin-seccion-inventario">
             <div class="modern-card animate-entry" style="margin-bottom: 30px;">
                 <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px;">

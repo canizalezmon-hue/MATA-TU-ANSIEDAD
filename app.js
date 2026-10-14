@@ -12,7 +12,7 @@ let usuariosDeLaNube = [];
 let productos = [];
 let deudasGlobales = []; 
 let pagosGlobales = []; 
-let categoriaActual = 'Todas'; 
+let categoriaActual = 'Todas'; // 🔥 NUEVO: Para saber qué filtro está activo
 
 function setCookie(name, value, days) {
     let expires = "";
@@ -67,56 +67,9 @@ let diasCobroGlobales = JSON.parse(localStorage.getItem('mta_dias_cobro')) || [1
 let categoriasMTA = JSON.parse(localStorage.getItem('mta_categorias')) || ['Dulce', 'Salado'];
 
 // ==========================================
-// 🔥 NUEVO: FUNCIÓN PARA MOSTRAR ESQUELETOS
-// ==========================================
-function mostrarEsqueletos() {
-    // 1. Mostrar esqueletos para las categorías
-    const catContainer = document.getElementById('category-filters');
-    if (catContainer) {
-        catContainer.innerHTML = `
-            <div class="skeleton-btn-load" style="width: 80px; height: 35px; margin-top:0; border-radius: 20px;"></div>
-            <div class="skeleton-btn-load" style="width: 100px; height: 35px; margin-top:0; border-radius: 20px;"></div>
-            <div class="skeleton-btn-load" style="width: 90px; height: 35px; margin-top:0; border-radius: 20px;"></div>
-        `;
-    }
-
-    // 2. Mostrar esqueletos de tarjetas (6 tarjetas falsas)
-    const grid = document.getElementById('product-grid');
-    if (grid) {
-        grid.innerHTML = '';
-        for (let i = 0; i < 6; i++) {
-            grid.innerHTML += `
-                <div class="skeleton-card">
-                    <div class="skeleton-img"></div>
-                    <div class="skeleton-title"></div>
-                    <div class="skeleton-price"></div>
-                    <div class="skeleton-price" style="width: 30%;"></div>
-                    <div class="skeleton-btn-load"></div>
-                </div>`;
-        }
-    }
-}
-
-// ==========================================
 // 2. Inicialización
 // ==========================================
 window.onload = async () => {
-    // 🔥 CAMBIO: Si el usuario ya está logueado, mostramos los esqueletos y la interfaz inmediatamente 🔥
-    if (usuarioActivo) {
-        document.getElementById('welcome-screen').style.display = 'none';
-        document.getElementById('main-nav').style.display = 'flex';
-        document.getElementById('btn-user-dropdown').innerText = `👤 Cargando Perfil... ▼`;
-        
-        // Si no es el administrador, mostramos la tienda con los esqueletos
-        if (usuarioActivo !== 'admin' && usuarioActivo !== 'administrador@matatuansiedad.com') {
-            document.getElementById('store-content').style.display = 'block';
-            mostrarEsqueletos(); // ¡Aparece la magia de carga rápida!
-        } else {
-            document.getElementById('admin-page').style.display = 'block';
-        }
-    }
-
-    // AHORA SÍ, mientras el usuario ve los esqueletos, traemos la data real
     try {
         const urlFresco = GOOGLE_SHEETS_API + "?t=" + new Date().getTime();
         const respuesta = await fetch(urlFresco);
@@ -148,7 +101,6 @@ window.onload = async () => {
             showToast(`🚫 TU CUENTA FUE BLOQUEADA.<br>Motivo: ${usuarioVerificado.motivo}`);
             cerrarSesion();
         } else {
-            // Ya que llegó la data, ejecutamos la entrada para REEMPLAZAR los esqueletos por la data real
             ejecutarEntrada();
         }
     }
@@ -164,9 +116,11 @@ window.onload = async () => {
         }
     }
 
+    // 🔥 MODIFICADO: Ahora la barra de búsqueda llama al filtro combinado 🔥
     document.getElementById('input-search').addEventListener('input', () => {
         aplicarFiltrosGlobales();
     });
+
     document.getElementById('chk-metodo').addEventListener('change', renderResumenCheckout);
 };
 
@@ -198,6 +152,9 @@ async function obtenerTasaBCV() {
     } catch (e) { document.getElementById('tasa-bcv-display').innerText = TASA_BCV.toFixed(2) + " (Aprox)"; }
 }
 
+// ==========================================
+// 2.B CREADOR DINÁMICO DE CATEGORÍAS (NUEVO)
+// ==========================================
 function obtenerEmojiCategoria(cat) {
     const c = cat.toLowerCase();
     if(c.includes('dulce') || c.includes('chocolate')) return '🍫';
@@ -207,15 +164,17 @@ function obtenerEmojiCategoria(cat) {
     if(c.includes('postre') || c.includes('torta') || c.includes('cake')) return '🍰';
     if(c.includes('salud') || c.includes('sano')) return '🍎';
     if(c.includes('cafe') || c.includes('café')) return '☕';
-    return '🏷️'; 
+    return '🏷️'; // Emoji por defecto si no reconoce la palabra
 }
 
 function renderCategorias() {
     const container = document.getElementById('category-filters');
     if(!container) return;
     
+    // El botón principal de "Todas"
     let html = `<button class="cat-btn active" onclick="filtrarPorCategoria('Todas', this)">🍬 Todas</button>`;
     
+    // Botones dinámicos para cada categoría que exista en categoriasMTA
     categoriasMTA.forEach(cat => {
         let emoji = obtenerEmojiCategoria(cat);
         html += `<button class="cat-btn" onclick="filtrarPorCategoria('${cat}', this)">${emoji} ${cat}</button>`;
@@ -226,16 +185,28 @@ function renderCategorias() {
 
 window.filtrarPorCategoria = (cat, btnElement) => {
     categoriaActual = cat;
+    
+    // Cambia el estilo del botón seleccionado
     document.querySelectorAll('.cat-btn').forEach(btn => btn.classList.remove('active'));
     if(btnElement) btnElement.classList.add('active');
+    
     aplicarFiltrosGlobales();
 };
 
 function aplicarFiltrosGlobales() {
     const query = document.getElementById('input-search').value.toLowerCase();
     let filtrados = productos;
-    if(categoriaActual !== 'Todas') { filtrados = filtrados.filter(p => p.cat === categoriaActual); }
-    if(query) { filtrados = filtrados.filter(p => p.nombre.toLowerCase().includes(query)); }
+    
+    // Primero filtra por la categoría seleccionada (si no es "Todas")
+    if(categoriaActual !== 'Todas') {
+        filtrados = filtrados.filter(p => p.cat === categoriaActual);
+    }
+    
+    // Luego filtra por lo que la persona haya escrito
+    if(query) {
+        filtrados = filtrados.filter(p => p.nombre.toLowerCase().includes(query));
+    }
+    
     renderProductos(filtrados);
 }
 
@@ -350,7 +321,11 @@ window.procesarAuth = async () => {
 
     const cuentaNube = usuariosDeLaNube.find(usr => usr.correo === u);
     if (!cuentaNube) return showToast("❌ Usuario no existe. Regístrate en la pestaña 'Registrarse'.");
-    if (cuentaNube.estado === 'Bloqueado') return showToast(`🚫 TU CUENTA ESTÁ BLOQUEADA.<br><br>Motivo: ${cuentaNube.motivo}`);
+    
+    if (cuentaNube.estado === 'Bloqueado') {
+        return showToast(`🚫 TU CUENTA ESTÁ BLOQUEADA.<br><br>Motivo: ${cuentaNube.motivo}`);
+    }
+
     if (!cuentaNube.clave) return showToast("⚠️ Tu cuenta requiere una contraseña nueva. Usa la opción '¿Olvidaste tu contraseña?'");
     if (cuentaNube.clave !== p) return showToast("🔒 Contraseña incorrecta");
 
@@ -363,26 +338,20 @@ function iniciarSesionSistema() {
 }
 
 function ejecutarEntrada() {
-    document.getElementById('welcome-screen').style.display = 'none'; 
-    document.getElementById('main-nav').style.display = 'flex'; 
-    document.getElementById('btn-user-dropdown').innerText = `👤 Hola, ${datosUsuario.nombres} ▼`;
+    document.getElementById('welcome-screen').style.display = 'none'; document.getElementById('main-nav').style.display = 'flex'; document.getElementById('btn-user-dropdown').innerText = `👤 Hola, ${datosUsuario.nombres} ▼`;
     const dropdown = document.getElementById('user-dropdown');
-    
     if (usuarioActivo === 'admin') {
         document.getElementById('btn-cart-nav').style.display = 'none';
         dropdown.innerHTML = `<a href="#" onclick="abrirPanelAdmin()">⚙️ Panel Administrativo</a><a href="#" style="color: #EF4444;" onclick="cerrarSesion()">Cerrar Sesión</a>`;
-        document.getElementById('admin-page').style.display = 'block';
-        document.getElementById('store-content').style.display = 'none'; 
     } else {
         document.getElementById('btn-cart-nav').style.display = 'block';
         dropdown.innerHTML = `<a href="#" onclick="abrirPerfil()">Ver Mi Perfil / Facturas</a><a href="#" style="color: #EF4444;" onclick="cerrarSesion()">Cerrar Sesión</a>`;
-        document.getElementById('admin-page').style.display = 'none'; 
-        document.getElementById('store-content').style.display = 'block'; 
-        
-        // Carga final de la tienda
-        renderCategorias(); 
-        aplicarFiltrosGlobales(); 
     }
+    document.getElementById('store-content').style.display = 'block'; document.getElementById('admin-page').style.display = 'none'; 
+    
+    // 🔥 DIBUJA LAS CATEGORÍAS ANTES DE LOS PRODUCTOS 🔥
+    renderCategorias(); 
+    aplicarFiltrosGlobales(); 
 }
 
 window.cerrarSesion = () => { eraseCookie('mta_session_user'); eraseCookie('mta_session_data'); eraseCookie('mta_session_time'); location.reload(); };
@@ -442,7 +411,9 @@ function renderProductos(lista) {
         document.getElementById('search-error').style.display = 'block'; 
         document.getElementById('search-error').innerHTML = "🕵️ ¡Ups! Parece que no hay antojos con ese nombre o en esa categoría."; 
         return;
-    } else { document.getElementById('search-error').style.display = 'none'; }
+    } else { 
+        document.getElementById('search-error').style.display = 'none'; 
+    }
 
     lista.forEach(p => {
         const agotado = p.stock <= 0; const precioBs = (p.precio * TASA_BCV).toFixed(2);
@@ -620,6 +591,7 @@ window.guardarCambioAdmin = async (id) => {
         prod.precio = parseFloat(document.getElementById(`adm-precio-${id}`).value); prod.stock = parseInt(document.getElementById(`adm-stock-${id}`).value);
         await respaldarInventarioEnNube(); 
         localStorage.setItem('mta_productos', JSON.stringify(productos)); showToast("Inventario actualizado ✅"); renderAdminInventario(); 
+        renderCategorias(); // Actualiza por si cambió algo
     }
 };
 
@@ -648,6 +620,7 @@ window.agregarProductoAdmin = async () => {
     document.getElementById('admin-add-nombre').value = ''; document.getElementById('admin-add-precio').value = ''; document.getElementById('admin-add-stock').value = ''; document.getElementById('admin-add-img-url').value = ''; document.getElementById('admin-add-img-gallery').value = ''; document.getElementById('admin-add-img-camera').value = ''; document.getElementById('file-msg-text').innerHTML = 'Ninguna imagen seleccionada'; document.getElementById('admin-add-new-cat').value = ''; document.getElementById('grupo-nueva-cat').style.display = 'none';
     btnSave.innerText = "💾 Guardar Producto en Catálogo"; btnSave.style.pointerEvents = "auto"; 
     renderAdminInventario();
+    renderCategorias(); // 🔥 Dibuja el botón si se creó nueva categoría
 };
 
 window.abrirModalEditar = (id) => {
@@ -670,12 +643,14 @@ window.guardarEdicionAdmin = async () => {
     p.nombre = n; p.cat = c; p.precio = precio; p.stock = stock; p.img = finalImg;
     
     await respaldarInventarioEnNube(); 
-    localStorage.setItem('mta_productos', JSON.stringify(productos)); showToast("✨ Producto actualizado exitosamente"); document.getElementById('modal-admin-editar').style.display = 'none'; renderAdminInventario();
+    localStorage.setItem('mta_productos', JSON.stringify(productos)); showToast("✨ Producto actualizado exitosamente"); document.getElementById('modal-admin-editar').style.display = 'none'; 
+    renderAdminInventario();
+    renderCategorias(); 
     btnSave.innerText = "🔄 Actualizar Producto"; btnSave.style.pointerEvents = "auto";
 };
 
 // ==========================================
-// 8. Panel de Usuarios y Deudas
+// 8. Panel de Usuarios, Deudas y Reportes
 // ==========================================
 function renderAdminUsuarios() {
     const list = document.getElementById('admin-users-list'); list.innerHTML = '';
@@ -712,6 +687,7 @@ function renderAdminDeudas() {
     });
 }
 
+// 🔥 NUEVO: RENDERIZAR REPORTES Y EXPORTAR A CSV 🔥
 function renderAdminReportes() {
     const list = document.getElementById('admin-reportes-list'); list.innerHTML = '';
     
@@ -757,8 +733,10 @@ window.descargarPagosCSV = () => {
 
     if(filtrados.length === 0) return showToast("No hay pagos para exportar en estas fechas.");
     
+    // 1. Ordenar alfabéticamente por nombre
     filtrados.sort((a, b) => a.nombre.localeCompare(b.nombre));
 
+    // 2. Agrupar por usuario
     let agrupados = {};
     filtrados.forEach(p => {
         if(!agrupados[p.correo]) agrupados[p.correo] = { nombre: p.nombre, pagos: [], totalUsd: 0 };
@@ -766,6 +744,7 @@ window.descargarPagosCSV = () => {
         agrupados[p.correo].totalUsd += p.monto;
     });
 
+    // 3. Crear el formato para Excel (usamos Punto y Coma para separar las columnas correctamente en Latinoamérica)
     let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
     csvContent += "FECHA;CORREO;NOMBRE DEL CLIENTE;MONTO (USD);MONTO ESTIMADO (BS)\n";
     
@@ -774,23 +753,27 @@ window.descargarPagosCSV = () => {
     for (let correo in agrupados) {
         let usr = agrupados[correo];
         
+        // Pagos individuales del usuario
         usr.pagos.forEach(p => {
             let fechaF = new Date(p.fecha).toLocaleDateString('es-VE');
             let montoBs = (p.monto * TASA_BCV).toFixed(2);
             csvContent += `${fechaF};${p.correo};${p.nombre};${p.monto.toFixed(2)};${montoBs}\n`;
         });
         
+        // Fila de Total por Usuario
         let totalUsd = usr.totalUsd;
         let totalBs = (totalUsd * TASA_BCV).toFixed(2);
         granTotalUsd += totalUsd;
         
         csvContent += `;;TOTAL DE ${usr.nombre.toUpperCase()};${totalUsd.toFixed(2)};${totalBs}\n`;
-        csvContent += `;;;;\n`; 
+        csvContent += `;;;;\n`; // Espacio en blanco para separar del siguiente usuario
     }
     
+    // Fila del Gran Total Final
     let granTotalBs = (granTotalUsd * TASA_BCV).toFixed(2);
     csvContent += `;;GRAN TOTAL RECAUDADO;${granTotalUsd.toFixed(2)};${granTotalBs}\n`;
 
+    // 4. Descargar
     var encodedUri = encodeURI(csvContent);
     var link = document.createElement("a");
     link.setAttribute("href", encodedUri);
