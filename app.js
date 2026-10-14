@@ -30,7 +30,7 @@ function getCookie(name) {
 }
 function eraseCookie(name) { document.cookie = name +'=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;'; }
 
-// Función puente para enviar datos a Google Sheets de forma invisible
+// Función puente para enviar datos a Google Sheets
 function enviarDatosGoogle(datos) {
     const formData = new URLSearchParams();
     for (const key in datos) {
@@ -40,8 +40,8 @@ function enviarDatosGoogle(datos) {
         method: 'POST',
         body: formData,
         mode: 'no-cors' 
-    }).then(() => console.log("☁️ Datos sincronizados con Google Sheets"))
-      .catch(e => console.error("Error sincronizando con Sheets", e));
+    }).then(() => console.log("☁️ Sincronizado con Google Sheets"))
+      .catch(e => console.error("Error sincronizando", e));
 }
 
 let usuarioActivo = getCookie('mta_session_user'); 
@@ -56,7 +56,6 @@ let datosTemporales = {};
 let temporizadorOTP = null;
 let productoEnEdicionId = null;
 
-// Base de Datos Local
 const catalogoBase = [
     { id: 1, nombre: "Chocolate Savoy", precio: 1.00, stock: 20, img: "https://images.unsplash.com/photo-1549007994-cb92caebd54b?w=200", cat: "Dulce" },
     { id: 2, nombre: "Cri Cri Pequeño", precio: 1.20, stock: 15, img: "https://images.unsplash.com/photo-1614088685112-0a760b71a3c8?w=200", cat: "Dulce" },
@@ -159,7 +158,6 @@ window.generarYMostrarCodigoOTP = () => {
     t.className = 'toast'; 
     t.innerHTML = `📱 TU CÓDIGO MTA ES: <strong style="font-size:1.3rem;">${codigoGeneradoOTP}</strong><br><small style="font-weight:normal;">Desaparecerá en 10 segundos</small>`;
     cont.appendChild(t); 
-
     if (temporizadorOTP) clearTimeout(temporizadorOTP);
     temporizadorOTP = setTimeout(() => { t.remove(); }, 10000); 
 };
@@ -195,7 +193,6 @@ window.procesarAuth = () => {
 
             localStorage.setItem(`acc_${datosTemporales.correo}`, JSON.stringify(datosTemporales));
             
-            // 🌟 ENVIAR NUEVO USUARIO A GOOGLE SHEETS
             enviarDatosGoogle({
                 action: 'registrarCliente',
                 nombres: datosTemporales.nombres,
@@ -379,9 +376,7 @@ window.abrirDetalle = (id) => {
     }
     
     document.getElementById('detalle-body').innerHTML = `
-        <div class="img-zoom-container">
-            <img src="${p.img}" class="img-zoom">
-        </div>
+        <div class="img-zoom-container"><img src="${p.img}" class="img-zoom"></div>
         <h2>${p.nombre}</h2>
         <h3 class="prod-price-usd" style="font-size: 2rem;">${precioMostrarUsd}</h3>
         <p class="prod-price-bs">${precioMostrarBs}</p>
@@ -445,9 +440,7 @@ function renderSugerencias() {
     sugeridos.slice(0, 3).forEach(p => {
         sugBox.innerHTML += `
             <div class="sug-card" onclick="agregarAlCarrito(${p.id}); renderContenidoCarrito();">
-                <img src="${p.img}">
-                <p style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"><strong>${p.nombre}</strong></p>
-                <p style="color:var(--primary); font-size:0.9rem;">+ $${p.precio.toFixed(2)}</p>
+                <img src="${p.img}"><p style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"><strong>${p.nombre}</strong></p><p style="color:var(--primary); font-size:0.9rem;">+ $${p.precio.toFixed(2)}</p>
             </div>
         `;
     });
@@ -527,13 +520,13 @@ window.finalizarCompra = () => {
     ordenesGlobales.unshift(nuevaFacturaGlobal);
     localStorage.setItem('mta_global_orders', JSON.stringify(ordenesGlobales));
 
-    // 🌟 ENVIAR DEUDA Y DESGLOSE A GOOGLE SHEETS PARA LA MATRIZ
     if (m === 'credito') {
         enviarDatosGoogle({
             action: 'nuevaCompra',
             correo: usuarioActivo,
+            nombres: n + " " + a, // Añadido para usuarios antiguos
             totalUsd: totalCobrarUsd,
-            detalles: JSON.stringify(carrito) // <-- ESTO ENVÍA EL DETALLE DE LOS PRODUCTOS Y CANTIDADES
+            detalles: JSON.stringify(carrito) 
         });
     }
 
@@ -561,10 +554,7 @@ function generarTicketHTML(nom, ape, ubi, metodo, tUsd, tBs, itemsTicket) {
         <h2>🍬 MATA TU ANSIEDAD</h2>
         <p style="font-size: 0.7rem; color: #666; margin-bottom: 10px;">Ticket / Tasa (Hoy): ${TASA_BCV.toFixed(2)}</p>
         <p style="font-size: 0.8rem; text-align: left;"><strong>Cliente:</strong> ${nom} ${ape}<br><strong>Área:</strong> ${ubi}<br><strong>Modalidad:</strong> ${metodo.toUpperCase()}</p>
-        <table class="ticket-table">
-            <thead><tr><th>Cant/Desc</th><th style="text-align:right;">Monto</th></tr></thead>
-            <tbody>${itemsStr}</tbody>
-        </table>
+        <table class="ticket-table"><thead><tr><th>Cant/Desc</th><th style="text-align:right;">Monto</th></tr></thead><tbody>${itemsStr}</tbody></table>
         <h3 style="text-align: right; margin-top: 10px;">Total USD: $${tUsd.toFixed(2)}</h3>
         <h4 style="text-align: right; color: #666;">Total Bs: ${tBs.toFixed(2)}</h4>
         <p style="font-size: 0.7rem; margin-top: 20px;">Tome captura de este ticket como soporte de su compra.</p>
@@ -610,22 +600,14 @@ function renderAdminInventario() {
                 <td>
                     <div style="display:flex; align-items:center; gap:10px;">
                         <img src="${p.img}" style="width:45px; height:45px; border-radius:8px; object-fit:cover; box-shadow:0 2px 5px rgba(0,0,0,0.1);">
-                        <div>
-                            <strong style="display:block;">${p.nombre}</strong>
-                            <span style="font-size:0.75rem; background:var(--bg-color); color:var(--primary); padding:2px 6px; border-radius:4px;">${p.cat}</span>
-                        </div>
+                        <div><strong style="display:block;">${p.nombre}</strong><span style="font-size:0.75rem; background:var(--bg-color); color:var(--primary); padding:2px 6px; border-radius:4px;">${p.cat}</span></div>
                     </div>
                 </td>
                 <td>
-                    <div style="display:flex; align-items:center; gap:5px;">
-                        <span style="color:#666;">$</span>
-                        <input type="number" step="0.10" value="${p.precio}" id="adm-precio-${p.id}" class="admin-input-table" style="width:70px;">
-                    </div>
+                    <div style="display:flex; align-items:center; gap:5px;"><span style="color:#666;">$</span><input type="number" step="0.10" value="${p.precio}" id="adm-precio-${p.id}" class="admin-input-table" style="width:70px;"></div>
                     <span style="font-size:0.75rem; color:#888; display:block; margin-top:3px;">≈ ${pBs} Bs</span>
                 </td>
-                <td>
-                    <input type="number" value="${p.stock}" id="adm-stock-${p.id}" class="admin-input-table">
-                </td>
+                <td><input type="number" value="${p.stock}" id="adm-stock-${p.id}" class="admin-input-table"></td>
                 <td style="text-align:center;">
                     <button class="btn-primary" style="padding: 4px 8px; font-size:0.75rem; margin-bottom:5px; width:90px;" onclick="guardarCambioAdmin(${p.id})">💾 Rápido</button><br>
                     <button class="btn-primary" style="background:#3B82F6; padding: 4px 8px; font-size:0.75rem; margin-bottom:5px; width:90px;" onclick="abrirModalEditar(${p.id})">✏️ Detalles</button><br>
@@ -681,7 +663,6 @@ window.procesarImagenLocal = (file) => {
                 let width = img.width; let height = img.height;
                 if (width > height) { if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; } } 
                 else { if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; } }
-                
                 canvas.width = width; canvas.height = height;
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(img, 0, 0, width, height);
@@ -742,24 +723,16 @@ window.agregarProductoAdmin = async () => {
         showToast("❌ Memoria llena. Usa imágenes de URL en lugar de subir fotos pesadas.");
     }
     
-    document.getElementById('admin-add-nombre').value = ''; 
-    document.getElementById('admin-add-precio').value = '';
-    document.getElementById('admin-add-stock').value = ''; 
-    document.getElementById('admin-add-img-url').value = '';
-    document.getElementById('admin-add-img-gallery').value = '';
-    document.getElementById('admin-add-img-camera').value = '';
+    document.getElementById('admin-add-nombre').value = ''; document.getElementById('admin-add-precio').value = '';
+    document.getElementById('admin-add-stock').value = ''; document.getElementById('admin-add-img-url').value = '';
+    document.getElementById('admin-add-img-gallery').value = ''; document.getElementById('admin-add-img-camera').value = '';
     document.getElementById('file-msg-text').innerHTML = 'Ninguna imagen seleccionada';
-    document.getElementById('admin-add-new-cat').value = '';
-    document.getElementById('grupo-nueva-cat').style.display = 'none';
+    document.getElementById('admin-add-new-cat').value = ''; document.getElementById('grupo-nueva-cat').style.display = 'none';
     
-    btnSave.innerText = "💾 Guardar Producto en Catálogo";
-    btnSave.style.pointerEvents = "auto";
+    btnSave.innerText = "💾 Guardar Producto en Catálogo"; btnSave.style.pointerEvents = "auto";
     renderAdminInventario();
 };
 
-// ==========================================
-// 8. EDICIÓN COMPLETA DE PRODUCTO
-// ==========================================
 window.abrirModalEditar = (id) => {
     const p = productos.find(x => x.id === id);
     if(!p) return;
@@ -783,12 +756,9 @@ window.abrirModalEditar = (id) => {
     }
 
     document.getElementById('edit-img-preview').src = p.img;
-    document.getElementById('edit-img-gallery').value = '';
-    document.getElementById('edit-img-camera').value = '';
-    document.getElementById('edit-img-url').value = '';
+    document.getElementById('edit-img-gallery').value = ''; document.getElementById('edit-img-camera').value = ''; document.getElementById('edit-img-url').value = '';
     document.getElementById('edit-file-msg-text').innerHTML = 'Mantendremos la imagen actual si no seleccionas otra.';
     document.getElementById('edit-file-msg-text').style.color = "var(--text-sub)";
-
     document.getElementById('modal-admin-editar').style.display = 'flex';
 };
 
@@ -820,39 +790,25 @@ window.guardarEdicionAdmin = async () => {
     if (fileGallery && fileGallery.files && fileGallery.files[0]) fileToUpload = fileGallery.files[0];
     else if (fileCamera && fileCamera.files && fileCamera.files[0]) fileToUpload = fileCamera.files[0];
 
-    btnSave.innerText = "⏳ Procesando...";
-    btnSave.style.pointerEvents = "none";
+    btnSave.innerText = "⏳ Procesando..."; btnSave.style.pointerEvents = "none";
 
     let finalImg = urlImg; 
-    if (fileToUpload) {
-        finalImg = await procesarImagenLocal(fileToUpload);
-    } else if (!urlImg) {
-        finalImg = p.img; 
-    }
+    if (fileToUpload) { finalImg = await procesarImagenLocal(fileToUpload); } else if (!urlImg) { finalImg = p.img; }
 
     if(!n || isNaN(precio) || isNaN(stock)) {
-        btnSave.innerText = "🔄 Actualizar Producto";
-        btnSave.style.pointerEvents = "auto";
+        btnSave.innerText = "🔄 Actualizar Producto"; btnSave.style.pointerEvents = "auto";
         return showToast("⚠️ Llena los campos básicos obligatorios");
     }
 
-    p.nombre = n;
-    p.cat = c;
-    p.precio = precio;
-    p.stock = stock;
-    p.img = finalImg;
+    p.nombre = n; p.cat = c; p.precio = precio; p.stock = stock; p.img = finalImg;
     
     try {
         localStorage.setItem('mta_productos', JSON.stringify(productos));
         showToast("✨ Producto actualizado exitosamente");
         document.getElementById('modal-admin-editar').style.display = 'none';
         renderAdminInventario();
-    } catch(err) {
-        showToast("❌ Memoria llena. Usa imágenes de URL.");
-    }
-    
-    btnSave.innerText = "🔄 Actualizar Producto";
-    btnSave.style.pointerEvents = "auto";
+    } catch(err) { showToast("❌ Memoria llena. Usa imágenes de URL."); }
+    btnSave.innerText = "🔄 Actualizar Producto"; btnSave.style.pointerEvents = "auto";
 };
 
 // ==========================================
@@ -894,12 +850,8 @@ window.toggleAdminStatus = (id, tipo) => {
         if(tipo === 'entrega') order.entregado = !order.entregado;
         if(tipo === 'pago') {
             order.pagado = !order.pagado;
-            // 🌟 SI EL ADMIN MARCA PAGADO, LIMPIA LA DEUDA EN GOOGLE SHEETS
-            if(order.pagado) {
-                enviarDatosGoogle({ action: 'marcarPagado', correo: order.correo });
-            }
+            if(order.pagado) enviarDatosGoogle({ action: 'marcarPagado', correo: order.correo });
         }
-        
         localStorage.setItem('mta_global_orders', JSON.stringify(ordenesGlobales));
         showToast("Estado actualizado correctamente 🔄");
         renderAdminPedidos();
@@ -914,10 +866,7 @@ function renderAdminConfig() {
 window.guardarDiasCobro = () => {
     const d1 = parseInt(document.getElementById('cfg-dia-1').value);
     const d2 = parseInt(document.getElementById('cfg-dia-2').value);
-
-    if(isNaN(d1) || isNaN(d2) || d1 < 1 || d1 > 31 || d2 < 1 || d2 > 31) {
-        return showToast("⚠️ Días inválidos (debe ser del 1 al 31)");
-    }
+    if(isNaN(d1) || isNaN(d2) || d1 < 1 || d1 > 31 || d2 < 1 || d2 > 31) return showToast("⚠️ Días inválidos (debe ser del 1 al 31)");
     diasCobroGlobales = [d1, d2];
     localStorage.setItem('mta_dias_cobro', JSON.stringify(diasCobroGlobales));
     showToast(`✅ Días de cobro actualizados al ${d1} y ${d2} del mes.`);
