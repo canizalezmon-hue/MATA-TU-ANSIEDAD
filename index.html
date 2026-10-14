@@ -6,6 +6,40 @@
     <title>Mata Tu Ansiedad | Confitería</title>
     <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
+    
+    <!-- 🔥 NUEVO: Estilos para la barra de categorías deslizable 🔥 -->
+    <style>
+        .category-bar {
+            display: flex;
+            gap: 10px;
+            overflow-x: auto;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+            scrollbar-width: none; /* Oculta scroll en Firefox */
+        }
+        .category-bar::-webkit-scrollbar {
+            display: none; /* Oculta scroll en Chrome/Safari */
+        }
+        .cat-btn {
+            background: #f3f4f6;
+            border: 1px solid #ddd;
+            border-radius: 20px;
+            padding: 8px 16px;
+            font-size: 0.9rem;
+            color: #555;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.3s ease;
+            font-family: 'Nunito', sans-serif;
+            font-weight: 700;
+        }
+        .cat-btn.active {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+            box-shadow: 0 4px 6px rgba(236, 72, 153, 0.3);
+        }
+    </style>
 </head>
 <body>
     <div id="cobro-banner" style="display:none;">
@@ -80,8 +114,14 @@
     </nav>
 
     <div id="store-content" class="container" style="display: none;">
+        
+        <!-- 🔥 NUEVO: BARRA DE CATEGORÍAS 🔥 -->
+        <div id="category-filters" class="category-bar">
+            <!-- Se llena dinámicamente con JavaScript -->
+        </div>
+
         <h2 class="section-title">Nuestros Antojos Disponibles</h2>
-        <div id="search-error" style="display: none; text-align: center; color: #666;">No encontramos ese producto :(</div>
+        <div id="search-error" style="display: none; text-align: center; color: #666; margin-top: 20px;">No encontramos ese producto o categoría :(</div>
         <div id="product-grid" class="grid"></div>
     </div>
 
@@ -191,7 +231,6 @@
             </div>
         </div>
 
-        <!-- 🔥 PESTAÑA MEJORADA DE REPORTES 🔥 -->
         <div id="admin-seccion-reportes" style="display:none;">
             <div class="modern-card animate-entry" style="margin-bottom: 20px; text-align: center;">
                 <h3 style="color:var(--primary); margin-bottom:10px;">📊 Contabilidad y Reportes</h3>

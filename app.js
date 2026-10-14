@@ -11,7 +11,8 @@ let carrito = [];
 let usuariosDeLaNube = []; 
 let productos = [];
 let deudasGlobales = []; 
-let pagosGlobales = [];
+let pagosGlobales = []; 
+let categoriaActual = 'Todas'; // 🔥 NUEVO: Para saber qué filtro está activo
 
 function setCookie(name, value, days) {
     let expires = "";
@@ -65,8 +66,6 @@ let ordenesGlobales = JSON.parse(localStorage.getItem('mta_global_orders')) || [
 let diasCobroGlobales = JSON.parse(localStorage.getItem('mta_dias_cobro')) || [15, 30]; 
 let categoriasMTA = JSON.parse(localStorage.getItem('mta_categorias')) || ['Dulce', 'Salado'];
 
-const catalogoBase = [];
-
 // ==========================================
 // 2. Inicialización
 // ==========================================
@@ -117,11 +116,11 @@ window.onload = async () => {
         }
     }
 
-    document.getElementById('input-search').addEventListener('input', (e) => {
-        const query = e.target.value.toLowerCase();
-        const filtrados = productos.filter(p => p.nombre.toLowerCase().includes(query));
-        renderProductos(filtrados);
+    // 🔥 MODIFICADO: Ahora la barra de búsqueda llama al filtro combinado 🔥
+    document.getElementById('input-search').addEventListener('input', () => {
+        aplicarFiltrosGlobales();
     });
+
     document.getElementById('chk-metodo').addEventListener('change', renderResumenCheckout);
 };
 
@@ -151,6 +150,64 @@ async function obtenerTasaBCV() {
         TASA_BCV = data.promedio;
         document.getElementById('tasa-bcv-display').innerText = TASA_BCV.toFixed(2);
     } catch (e) { document.getElementById('tasa-bcv-display').innerText = TASA_BCV.toFixed(2) + " (Aprox)"; }
+}
+
+// ==========================================
+// 2.B CREADOR DINÁMICO DE CATEGORÍAS (NUEVO)
+// ==========================================
+function obtenerEmojiCategoria(cat) {
+    const c = cat.toLowerCase();
+    if(c.includes('dulce') || c.includes('chocolate')) return '🍫';
+    if(c.includes('salad') || c.includes('snack') || c.includes('dorito')) return '🍟';
+    if(c.includes('galleta')) return '🍪';
+    if(c.includes('bebida') || c.includes('jugo') || c.includes('refresco')) return '🥤';
+    if(c.includes('postre') || c.includes('torta') || c.includes('cake')) return '🍰';
+    if(c.includes('salud') || c.includes('sano')) return '🍎';
+    if(c.includes('cafe') || c.includes('café')) return '☕';
+    return '🏷️'; // Emoji por defecto si no reconoce la palabra
+}
+
+function renderCategorias() {
+    const container = document.getElementById('category-filters');
+    if(!container) return;
+    
+    // El botón principal de "Todas"
+    let html = `<button class="cat-btn active" onclick="filtrarPorCategoria('Todas', this)">🍬 Todas</button>`;
+    
+    // Botones dinámicos para cada categoría que exista en categoriasMTA
+    categoriasMTA.forEach(cat => {
+        let emoji = obtenerEmojiCategoria(cat);
+        html += `<button class="cat-btn" onclick="filtrarPorCategoria('${cat}', this)">${emoji} ${cat}</button>`;
+    });
+    
+    container.innerHTML = html;
+}
+
+window.filtrarPorCategoria = (cat, btnElement) => {
+    categoriaActual = cat;
+    
+    // Cambia el estilo del botón seleccionado
+    document.querySelectorAll('.cat-btn').forEach(btn => btn.classList.remove('active'));
+    if(btnElement) btnElement.classList.add('active');
+    
+    aplicarFiltrosGlobales();
+};
+
+function aplicarFiltrosGlobales() {
+    const query = document.getElementById('input-search').value.toLowerCase();
+    let filtrados = productos;
+    
+    // Primero filtra por la categoría seleccionada (si no es "Todas")
+    if(categoriaActual !== 'Todas') {
+        filtrados = filtrados.filter(p => p.cat === categoriaActual);
+    }
+    
+    // Luego filtra por lo que la persona haya escrito
+    if(query) {
+        filtrados = filtrados.filter(p => p.nombre.toLowerCase().includes(query));
+    }
+    
+    renderProductos(filtrados);
 }
 
 // ==========================================
@@ -264,7 +321,11 @@ window.procesarAuth = async () => {
 
     const cuentaNube = usuariosDeLaNube.find(usr => usr.correo === u);
     if (!cuentaNube) return showToast("❌ Usuario no existe. Regístrate en la pestaña 'Registrarse'.");
-    if (cuentaNube.estado === 'Bloqueado') return showToast(`🚫 TU CUENTA ESTÁ BLOQUEADA.<br><br>Motivo: ${cuentaNube.motivo}`);
+    
+    if (cuentaNube.estado === 'Bloqueado') {
+        return showToast(`🚫 TU CUENTA ESTÁ BLOQUEADA.<br><br>Motivo: ${cuentaNube.motivo}`);
+    }
+
     if (!cuentaNube.clave) return showToast("⚠️ Tu cuenta requiere una contraseña nueva. Usa la opción '¿Olvidaste tu contraseña?'");
     if (cuentaNube.clave !== p) return showToast("🔒 Contraseña incorrecta");
 
@@ -286,7 +347,11 @@ function ejecutarEntrada() {
         document.getElementById('btn-cart-nav').style.display = 'block';
         dropdown.innerHTML = `<a href="#" onclick="abrirPerfil()">Ver Mi Perfil / Facturas</a><a href="#" style="color: #EF4444;" onclick="cerrarSesion()">Cerrar Sesión</a>`;
     }
-    document.getElementById('store-content').style.display = 'block'; document.getElementById('admin-page').style.display = 'none'; renderProductos(productos);
+    document.getElementById('store-content').style.display = 'block'; document.getElementById('admin-page').style.display = 'none'; 
+    
+    // 🔥 DIBUJA LAS CATEGORÍAS ANTES DE LOS PRODUCTOS 🔥
+    renderCategorias(); 
+    aplicarFiltrosGlobales(); 
 }
 
 window.cerrarSesion = () => { eraseCookie('mta_session_user'); eraseCookie('mta_session_data'); eraseCookie('mta_session_time'); location.reload(); };
@@ -343,8 +408,12 @@ window.verTicketAntiguo = (idFicha) => {
 function renderProductos(lista) {
     const grid = document.getElementById('product-grid'); grid.innerHTML = '';
     if(lista.length === 0) {
-        document.getElementById('search-error').style.display = 'block'; document.getElementById('search-error').innerHTML = "No hay productos en el inventario de la nube en este momento."; return;
-    } else { document.getElementById('search-error').style.display = 'none'; }
+        document.getElementById('search-error').style.display = 'block'; 
+        document.getElementById('search-error').innerHTML = "🕵️ ¡Ups! Parece que no hay antojos con ese nombre o en esa categoría."; 
+        return;
+    } else { 
+        document.getElementById('search-error').style.display = 'none'; 
+    }
 
     lista.forEach(p => {
         const agotado = p.stock <= 0; const precioBs = (p.precio * TASA_BCV).toFixed(2);
@@ -392,7 +461,7 @@ window.abrirCarrito = () => { renderContenidoCarrito(); document.getElementById(
 
 function renderContenidoCarrito() {
     const list = document.getElementById('cart-items'); let subtotal = 0; list.innerHTML = '';
-    if (carrito.length === 0) { list.innerHTML = '<p style="text-align:center;">El carrito está vacío</p>'; }
+    if (carrito.length === 0) { list.innerHTML = '<p style="text-align:center;">🛒 ¡Tu carrito está muy triste y vacío! Ve a la tienda a calmar tu ansiedad.</p>'; }
     else {
         carrito.forEach((item, index) => {
             subtotal += item.precio * item.qty;
@@ -428,7 +497,7 @@ window.irACheckout = () => {
     document.getElementById('chk-nombres').value = datosUsuario.nombres; document.getElementById('chk-apellidos').value = datosUsuario.apellidos; document.getElementById('chk-ubicacion').value = datosUsuario.area;
     renderResumenCheckout();
 };
-window.irAInicio = () => { document.getElementById('checkout-page').style.display = 'none'; document.getElementById('admin-page').style.display = 'none'; document.getElementById('store-content').style.display = 'block'; renderProductos(productos); };
+window.irAInicio = () => { document.getElementById('checkout-page').style.display = 'none'; document.getElementById('admin-page').style.display = 'none'; document.getElementById('store-content').style.display = 'block'; aplicarFiltrosGlobales(); };
 
 function renderResumenCheckout() {
     const list = document.getElementById('chk-resumen-lista'); const metodo = document.getElementById('chk-metodo').value; 
@@ -522,6 +591,7 @@ window.guardarCambioAdmin = async (id) => {
         prod.precio = parseFloat(document.getElementById(`adm-precio-${id}`).value); prod.stock = parseInt(document.getElementById(`adm-stock-${id}`).value);
         await respaldarInventarioEnNube(); 
         localStorage.setItem('mta_productos', JSON.stringify(productos)); showToast("Inventario actualizado ✅"); renderAdminInventario(); 
+        renderCategorias(); // Actualiza por si cambió algo
     }
 };
 
@@ -548,7 +618,9 @@ window.agregarProductoAdmin = async () => {
     await respaldarInventarioEnNube(); 
     localStorage.setItem('mta_productos', JSON.stringify(productos)); showToast("✨ Producto agregado exitosamente");
     document.getElementById('admin-add-nombre').value = ''; document.getElementById('admin-add-precio').value = ''; document.getElementById('admin-add-stock').value = ''; document.getElementById('admin-add-img-url').value = ''; document.getElementById('admin-add-img-gallery').value = ''; document.getElementById('admin-add-img-camera').value = ''; document.getElementById('file-msg-text').innerHTML = 'Ninguna imagen seleccionada'; document.getElementById('admin-add-new-cat').value = ''; document.getElementById('grupo-nueva-cat').style.display = 'none';
-    btnSave.innerText = "💾 Guardar Producto en Catálogo"; btnSave.style.pointerEvents = "auto"; renderAdminInventario();
+    btnSave.innerText = "💾 Guardar Producto en Catálogo"; btnSave.style.pointerEvents = "auto"; 
+    renderAdminInventario();
+    renderCategorias(); // 🔥 Dibuja el botón si se creó nueva categoría
 };
 
 window.abrirModalEditar = (id) => {
@@ -571,12 +643,14 @@ window.guardarEdicionAdmin = async () => {
     p.nombre = n; p.cat = c; p.precio = precio; p.stock = stock; p.img = finalImg;
     
     await respaldarInventarioEnNube(); 
-    localStorage.setItem('mta_productos', JSON.stringify(productos)); showToast("✨ Producto actualizado exitosamente"); document.getElementById('modal-admin-editar').style.display = 'none'; renderAdminInventario();
+    localStorage.setItem('mta_productos', JSON.stringify(productos)); showToast("✨ Producto actualizado exitosamente"); document.getElementById('modal-admin-editar').style.display = 'none'; 
+    renderAdminInventario();
+    renderCategorias(); 
     btnSave.innerText = "🔄 Actualizar Producto"; btnSave.style.pointerEvents = "auto";
 };
 
 // ==========================================
-// 8. Panel de Usuarios y Deudas
+// 8. Panel de Usuarios, Deudas y Reportes
 // ==========================================
 function renderAdminUsuarios() {
     const list = document.getElementById('admin-users-list'); list.innerHTML = '';
@@ -613,56 +687,7 @@ function renderAdminDeudas() {
     });
 }
 
-window.saldarDeudaAdmin = async (correo) => {
-    if(confirm("¿Estás seguro de perdonar/saldar esta deuda? Esto la pondrá en $0 en la base de datos de forma permanente.")) {
-        showToast("⏳ Procesando el pago en la Nube...");
-        await enviarDatosGoogle({ action: 'marcarPagado', correo: correo });
-        
-        let deuda = deudasGlobales.find(d => d.correo === correo);
-        if(deuda) deuda.total = 0;
-        
-        ordenesGlobales.forEach(o => { if (o.correo === correo && o.metodo === 'credito') o.pagado = true; });
-        localStorage.setItem('mta_global_orders', JSON.stringify(ordenesGlobales));
-        
-        showToast("✅ Deuda saldada correctamente.");
-        renderAdminDeudas();
-    }
-};
-
-window.bloquearUsuarioAdmin = async (correo) => {
-    let motivo = prompt("Indica el motivo del bloqueo (Ej: Debe dinero, Facturas pendientes):");
-    if(motivo) {
-        showToast("⏳ Bloqueando usuario en la Nube...");
-        await enviarDatosGoogle({ action: 'bloquearCliente', correo: correo, motivo: motivo });
-        let usr = usuariosDeLaNube.find(u => u.correo === correo);
-        if(usr) { usr.estado = 'Bloqueado'; usr.motivo = motivo; }
-        showToast("🚫 Usuario bloqueado exitosamente.");
-        renderAdminUsuarios();
-    }
-};
-
-window.desbloquearUsuarioAdmin = async (correo) => {
-    showToast("⏳ Desbloqueando usuario en la Nube...");
-    await enviarDatosGoogle({ action: 'desbloquearCliente', correo: correo });
-    let usr = usuariosDeLaNube.find(u => u.correo === correo);
-    if(usr) { usr.estado = 'Activo'; usr.motivo = ""; }
-    showToast("✅ Usuario activado exitosamente.");
-    renderAdminUsuarios();
-};
-
-window.eliminarUsuarioAdmin = async (correo) => {
-    if(confirm("⚠️ ¿Estás COMPLETAMENTE SEGURO de eliminar a este usuario? Perderá acceso inmediato.")) {
-        showToast("⏳ Eliminando usuario en la Nube...");
-        await enviarDatosGoogle({ action: 'eliminarCliente', correo: correo });
-        usuariosDeLaNube = usuariosDeLaNube.filter(u => u.correo !== correo);
-        showToast("🗑️ Usuario borrado.");
-        renderAdminUsuarios();
-    }
-};
-
-// ==========================================
-// 8.B REPORTES CSV (NUEVO)
-// ==========================================
+// 🔥 NUEVO: RENDERIZAR REPORTES Y EXPORTAR A CSV 🔥
 function renderAdminReportes() {
     const list = document.getElementById('admin-reportes-list'); list.innerHTML = '';
     
@@ -756,6 +781,53 @@ window.descargarPagosCSV = () => {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+};
+
+window.saldarDeudaAdmin = async (correo) => {
+    if(confirm("¿Estás seguro de perdonar/saldar esta deuda? Esto la pondrá en $0 en la base de datos de forma permanente.")) {
+        showToast("⏳ Procesando el pago en la Nube...");
+        await enviarDatosGoogle({ action: 'marcarPagado', correo: correo });
+        
+        let deuda = deudasGlobales.find(d => d.correo === correo);
+        if(deuda) deuda.total = 0;
+        
+        ordenesGlobales.forEach(o => { if (o.correo === correo && o.metodo === 'credito') o.pagado = true; });
+        localStorage.setItem('mta_global_orders', JSON.stringify(ordenesGlobales));
+        
+        showToast("✅ Deuda saldada correctamente.");
+        renderAdminDeudas();
+    }
+};
+
+window.bloquearUsuarioAdmin = async (correo) => {
+    let motivo = prompt("Indica el motivo del bloqueo (Ej: Debe dinero, Facturas pendientes):");
+    if(motivo) {
+        showToast("⏳ Bloqueando usuario en la Nube...");
+        await enviarDatosGoogle({ action: 'bloquearCliente', correo: correo, motivo: motivo });
+        let usr = usuariosDeLaNube.find(u => u.correo === correo);
+        if(usr) { usr.estado = 'Bloqueado'; usr.motivo = motivo; }
+        showToast("🚫 Usuario bloqueado exitosamente.");
+        renderAdminUsuarios();
+    }
+};
+
+window.desbloquearUsuarioAdmin = async (correo) => {
+    showToast("⏳ Desbloqueando usuario en la Nube...");
+    await enviarDatosGoogle({ action: 'desbloquearCliente', correo: correo });
+    let usr = usuariosDeLaNube.find(u => u.correo === correo);
+    if(usr) { usr.estado = 'Activo'; usr.motivo = ""; }
+    showToast("✅ Usuario activado exitosamente.");
+    renderAdminUsuarios();
+};
+
+window.eliminarUsuarioAdmin = async (correo) => {
+    if(confirm("⚠️ ¿Estás COMPLETAMENTE SEGURO de eliminar a este usuario? Perderá acceso inmediato.")) {
+        showToast("⏳ Eliminando usuario en la Nube...");
+        await enviarDatosGoogle({ action: 'eliminarCliente', correo: correo });
+        usuariosDeLaNube = usuariosDeLaNube.filter(u => u.correo !== correo);
+        showToast("🗑️ Usuario borrado. Si no debía dinero, también se eliminó de la matriz.");
+        renderAdminUsuarios();
+    }
 };
 
 // ==========================================
