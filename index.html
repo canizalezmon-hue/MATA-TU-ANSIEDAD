@@ -109,6 +109,7 @@
         </div>
     </div>
 
+    <!-- PANEL ADMINISTRATIVO -->
     <div id="admin-page" class="container" style="display: none;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap:10px;">
             <h2 style="font-weight: 900; color: var(--text-main);">⚙️ Panel Administrativo</h2>
@@ -116,8 +117,9 @@
                 <button class="btn-primary" style="padding:8px 15px; font-size:0.9rem;" onclick="cambiarSeccionAdmin('inventario')">📦 Inventario</button>
                 <button class="btn-primary" style="padding:8px 15px; font-size:0.9rem; background:#3B82F6;" onclick="cambiarSeccionAdmin('pedidos')">🧾 Pedidos</button>
                 <button class="btn-primary" style="padding:8px 15px; font-size:0.9rem; background:#10B981;" onclick="cambiarSeccionAdmin('usuarios')">👥 Usuarios</button>
-                <!-- 🔥 NUEVO BOTÓN DE DEUDAS 🔥 -->
                 <button class="btn-primary" style="padding:8px 15px; font-size:0.9rem; background:#F59E0B;" onclick="cambiarSeccionAdmin('deudas')">💰 Deudas</button>
+                <!-- 🔥 NUEVA PESTAÑA: REPORTES 🔥 -->
+                <button class="btn-primary" style="padding:8px 15px; font-size:0.9rem; background:#06B6D4;" onclick="cambiarSeccionAdmin('reportes')">📊 Reportes CSV</button>
                 <button class="btn-primary" style="padding:8px 15px; font-size:0.9rem; background:#8B5CF6;" onclick="cambiarSeccionAdmin('config')">⚙️ Ajustes</button>
             </div>
         </div>
@@ -181,12 +183,26 @@
             </div>
         </div>
 
-        <!-- 🔥 NUEVA PESTAÑA DE DEUDAS 🔥 -->
         <div id="admin-seccion-deudas" style="display:none;">
             <div class="checkout-box animate-entry" style="overflow-x: auto; padding:0;">
                 <table class="admin-table">
                     <thead style="background: #F59E0B; color: white;"><tr><th>Cliente</th><th>Deuda Acumulada</th><th style="text-align:center;">Acción</th></tr></thead>
                     <tbody id="admin-deudas-list"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- 🔥 NUEVA PESTAÑA: REPORTES 🔥 -->
+        <div id="admin-seccion-reportes" style="display:none;">
+            <div class="modern-card animate-entry" style="margin-bottom: 20px; text-align: center;">
+                <h3 style="color:var(--primary); margin-bottom:10px;">📊 Historial de Pagos</h3>
+                <p style="color:var(--text-sub); margin-bottom:20px;">Descarga la lista de todos los pagos que has marcado como "Saldados" para llevar tu control quincenal en Excel.</p>
+                <button class="btn-primary btn-large" style="background:#06B6D4; max-width: 300px; margin: 0 auto;" onclick="descargarPagosCSV()">⬇️ Descargar Reporte en Excel (CSV)</button>
+            </div>
+            <div class="checkout-box animate-entry" style="overflow-x: auto; padding:0;">
+                <table class="admin-table">
+                    <thead style="background: #06B6D4; color: white;"><tr><th>Fecha de Pago</th><th>Cliente</th><th>Monto Pagado</th></tr></thead>
+                    <tbody id="admin-reportes-list"></tbody>
                 </table>
             </div>
         </div>
