@@ -67,11 +67,13 @@ let diasCobroGlobales = JSON.parse(localStorage.getItem('mta_dias_cobro')) || [1
 let categoriasMTA = JSON.parse(localStorage.getItem('mta_categorias')) || ['Dulce', 'Salado'];
 
 // ==========================================
-// 2. Inicialización
+// 2. Inicialización con ANTICACHÉ
 // ==========================================
 window.onload = async () => {
     try {
-        const respuesta = await fetch(GOOGLE_SHEETS_API);
+        // 🔥 ANTICACHÉ: Forzamos al navegador a traer datos en vivo de Google Drive
+        const urlFresco = GOOGLE_SHEETS_API + "?t=" + new Date().getTime();
+        const respuesta = await fetch(urlFresco, { cache: "no-store" });
         const dataNube = await respuesta.json();
         
         if(dataNube.inventario && dataNube.inventario.length > 0) {
@@ -167,7 +169,7 @@ window.cambiarTabAuth = (modo) => {
 };
 
 window.iniciarRecuperacion = () => {
-    const u = document.getElementById('auth-email').value.trim();
+    const u = document.getElementById('auth-email').value.trim().toLowerCase();
     if (!u) return showToast("⚠️ Escribe tu correo arriba primero para cambiar la clave.");
 
     const existeEnNube = usuariosDeLaNube.find(usr => usr.correo === u);
@@ -201,7 +203,7 @@ window.generarYMostrarCodigoOTP = () => {
 
 window.procesarAuth = () => {
     const btn = document.getElementById('btn-auth-action');
-    const u = document.getElementById('auth-email').value.trim();
+    const u = document.getElementById('auth-email').value.trim().toLowerCase(); 
     const p = document.getElementById('auth-password').value.trim();
     const remember = document.getElementById('remember-me').checked;
 
