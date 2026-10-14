@@ -74,8 +74,9 @@ let categoriasMTA = JSON.parse(localStorage.getItem('mta_categorias')) || ['Dulc
 // ==========================================
 window.onload = async () => {
     try {
+        // 🔥 CORRECCIÓN: Un simple Fetch sin headers personalizados para que Google no lo bloquee.
         const urlFresco = GOOGLE_SHEETS_API + "?t=" + new Date().getTime();
-        const respuesta = await fetch(urlFresco, { cache: "no-store", headers: { 'pragma': 'no-cache' }});
+        const respuesta = await fetch(urlFresco);
         const dataNube = await respuesta.json();
         
         if(dataNube.inventario && dataNube.inventario.length > 0) productos = dataNube.inventario;
