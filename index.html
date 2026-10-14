@@ -51,7 +51,8 @@
                 
                 <div id="verification-area" style="display: none;">
                     <p style="font-size: 0.85rem; font-weight: bold; margin-bottom: 10px; color: var(--primary);">Ingresa el código de 6 dígitos:</p>
-                    <input type="text" id="auth-code" class="input-form" placeholder="Ej: 123456" maxlength="6">
+                    <!-- 🔥 AQUÍ ESTÁ EL CAMBIO PARA EL TECLADO NUMÉRICO EN CELULARES 🔥 -->
+                    <input type="text" id="auth-code" inputmode="numeric" pattern="[0-9]*" class="input-form" placeholder="Ej: 123456" maxlength="6">
                     <button class="btn-text" onclick="generarYMostrarCodigoOTP()" style="font-size: 0.85rem; margin-bottom: 15px; width: 100%; text-align: center;">¿No viste el código? Generar otro</button>
                 </div>
                 
