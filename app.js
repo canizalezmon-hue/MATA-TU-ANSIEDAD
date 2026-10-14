@@ -9,7 +9,7 @@ const GOOGLE_SHEETS_API = "https://script.google.com/macros/s/AKfycby-Fdc74UV1Fn
 
 let carrito = [];
 let usuariosDeLaNube = []; 
-let productos = []; // 🔥 AHORA EMPIEZA VACÍO, SIN SALVAVIDAS 🔥
+let productos = [];
 
 function setCookie(name, value, days) {
     let expires = "";
@@ -63,8 +63,10 @@ let ordenesGlobales = JSON.parse(localStorage.getItem('mta_global_orders')) || [
 let diasCobroGlobales = JSON.parse(localStorage.getItem('mta_dias_cobro')) || [15, 30]; 
 let categoriasMTA = JSON.parse(localStorage.getItem('mta_categorias')) || ['Dulce', 'Salado'];
 
+const catalogoBase = [];
+
 // ==========================================
-// 2. Inicialización y Sincronización Estricta
+// 2. Inicialización
 // ==========================================
 window.onload = async () => {
     try {
@@ -72,20 +74,14 @@ window.onload = async () => {
         const respuesta = await fetch(urlFresco);
         const dataNube = await respuesta.json();
         
-        // 🔥 LECTURA ESTRICTA DESDE GOOGLE DRIVE 🔥
         if(dataNube.inventario && dataNube.inventario.length > 0) {
             let unicos = [];
             let map = new Map();
             for (let item of dataNube.inventario) {
-                if(!map.has(item.id)){
-                    map.set(item.id, true);
-                    unicos.push(item);
-                }
+                if(!map.has(item.id)){ map.set(item.id, true); unicos.push(item); }
             }
-            productos = unicos; // Asigna EXCLUSIVAMENTE lo que viene del Drive
+            productos = unicos; 
         } else {
-             // Si el Drive está literalmente vacío, avisa, pero no inventa productos
-            showToast("El inventario en la nube está vacío.");
             productos = []; 
         }
         
@@ -94,7 +90,6 @@ window.onload = async () => {
     } catch(e) {
         console.error("Error crítico al cargar desde Google Drive:", e);
         showToast("⚠️ Problemas de conexión con la base de datos.");
-        // 🔥 Ya no carga productos falsos si hay error de red 🔥
         productos = []; 
     }
 
@@ -173,18 +168,14 @@ window.cambiarTabAuth = (modo) => {
     document.getElementById('remember-area').style.display = modoRegistro ? 'none' : 'block';
     document.getElementById('verification-area').style.display = 'none';
     document.getElementById('auth-email').style.display = 'block';
-    
     document.getElementById('email-shortcuts').style.display = modoRegistro ? 'flex' : 'none';
-    
     document.getElementById('btn-auth-action').innerText = modoRegistro ? "Crear Cuenta" : "Entrar";
 };
 
 window.completarDominio = (dominio) => {
     const emailInput = document.getElementById('auth-email');
     let val = emailInput.value.trim();
-    if (val.includes('@')) {
-        val = val.split('@')[0];
-    }
+    if (val.includes('@')) { val = val.split('@')[0]; }
     if (val !== "") {
         emailInput.value = val + dominio;
         document.getElementById('auth-password').focus(); 
@@ -237,22 +228,11 @@ window.procesarAuth = async () => {
     if (modoRecuperacion) {
         const codeInput = document.getElementById('auth-code').value.trim();
         if (codeInput !== codigoGeneradoOTP) return showToast("🔒 Código incorrecto. Genera otro.");
-
-        btn.innerText = "⏳ Guardando en la Nube...";
-        btn.style.pointerEvents = "none";
-
-        await enviarDatosGoogle({
-            action: 'cambiarClave',
-            correo: datosTemporales.correo,
-            nuevaClave: datosTemporales.clave
-        });
-
+        btn.innerText = "⏳ Guardando en la Nube..."; btn.style.pointerEvents = "none";
+        await enviarDatosGoogle({ action: 'cambiarClave', correo: datosTemporales.correo, nuevaClave: datosTemporales.clave });
         const usr = usuariosDeLaNube.find(usr => usr.correo === datosTemporales.correo);
         if(usr) usr.clave = datosTemporales.clave;
-
-        btn.innerText = "Entrar";
-        btn.style.pointerEvents = "auto";
-
+        btn.innerText = "Entrar"; btn.style.pointerEvents = "auto";
         showToast("✅ Contraseña actualizada exitosamente. Inicia sesión.");
         cambiarTabAuth('login');
         return;
@@ -260,97 +240,49 @@ window.procesarAuth = async () => {
 
     if (modoRegistro) {
         if (!pasoVerificacion) {
-            const nom = document.getElementById('reg-nombres').value.trim();
-            const ape = document.getElementById('reg-apellidos').value.trim();
-            const area = document.getElementById('reg-area').value.trim();
-            const tel = document.getElementById('reg-telefono').value.trim();
-
+            const nom = document.getElementById('reg-nombres').value.trim(); const ape = document.getElementById('reg-apellidos').value.trim(); const area = document.getElementById('reg-area').value.trim(); const tel = document.getElementById('reg-telefono').value.trim();
             if(!nom || !ape || !area || !tel || !u || !p) return showToast("⚠️ Completa todos los campos");
             if(!u.includes('@')) return showToast("⚠️ Por favor ingresa un correo válido");
-            
             const existeEnNube = usuariosDeLaNube.find(usr => usr.correo === u);
             if(existeEnNube) return showToast("❌ Correo ya registrado en el sistema");
-
             datosTemporales = { correo: u, clave: p, nombres: nom, apellidos: ape, area: area, telefono: tel };
             pasoVerificacion = true;
-
-            document.getElementById('register-fields').style.display = 'none';
-            document.getElementById('auth-email').style.display = 'none';
-            document.getElementById('email-shortcuts').style.display = 'none';
-            document.getElementById('password-area').style.display = 'none';
-            document.getElementById('verification-area').style.display = 'block';
-            btn.innerText = "Verificar Código";
+            document.getElementById('register-fields').style.display = 'none'; document.getElementById('auth-email').style.display = 'none'; document.getElementById('email-shortcuts').style.display = 'none'; document.getElementById('password-area').style.display = 'none'; document.getElementById('verification-area').style.display = 'block'; btn.innerText = "Verificar Código";
             generarYMostrarCodigoOTP(); 
         } else {
             const codeInput = document.getElementById('auth-code').value.trim();
             if (codeInput !== codigoGeneradoOTP) return showToast("🔒 Código incorrecto. Genera otro.");
-
-            btn.innerText = "⏳ Creando Cuenta en Nube...";
-            btn.style.pointerEvents = "none";
-
-            await enviarDatosGoogle({
-                action: 'registrarCliente',
-                nombres: datosTemporales.nombres,
-                apellidos: datosTemporales.apellidos,
-                area: datosTemporales.area,
-                telefono: datosTemporales.telefono,
-                correo: datosTemporales.correo,
-                clave: datosTemporales.clave
-            });
-
+            btn.innerText = "⏳ Creando Cuenta en Nube..."; btn.style.pointerEvents = "none";
+            await enviarDatosGoogle({ action: 'registrarCliente', nombres: datosTemporales.nombres, apellidos: datosTemporales.apellidos, area: datosTemporales.area, telefono: datosTemporales.telefono, correo: datosTemporales.correo, clave: datosTemporales.clave });
             usuariosDeLaNube.push(datosTemporales);
-            
-            btn.innerText = "Entrar";
-            btn.style.pointerEvents = "auto";
-            
-            showToast("🎉 Cuenta creada y sincronizada con la Nube.");
+            btn.innerText = "Entrar"; btn.style.pointerEvents = "auto"; showToast("🎉 Cuenta creada y sincronizada con la Nube.");
             cambiarTabAuth('login'); 
         }
         return;
     }
 
     if (!u || !p) return showToast("⚠️ Escribe correo y contraseña");
-
-    if (remember) { setCookie('mta_remember_email', u, 30); setCookie('mta_remember_pass', p, 30); } 
-    else { eraseCookie('mta_remember_email'); eraseCookie('mta_remember_pass'); }
+    if (remember) { setCookie('mta_remember_email', u, 30); setCookie('mta_remember_pass', p, 30); } else { eraseCookie('mta_remember_email'); eraseCookie('mta_remember_pass'); }
 
     if (u === 'administrador@matatuansiedad.com' && p === 'admin1234') {
-        usuarioActivo = 'admin'; datosUsuario = { nombres: 'Administrador', apellidos: 'Maestro', rol: 'admin' };
-        iniciarSesionSistema();
-        return;
+        usuarioActivo = 'admin'; datosUsuario = { nombres: 'Administrador', apellidos: 'Maestro', rol: 'admin' }; iniciarSesionSistema(); return;
     }
 
     const cuentaNube = usuariosDeLaNube.find(usr => usr.correo === u);
-    
-    if (!cuentaNube) {
-        return showToast("❌ Usuario no existe. Regístrate en la pestaña 'Registrarse'.");
-    }
-    
-    if (!cuentaNube.clave) {
-        return showToast("⚠️ Tu cuenta requiere una contraseña nueva. Usa la opción '¿Olvidaste tu contraseña?'");
-    }
-
+    if (!cuentaNube) return showToast("❌ Usuario no existe. Regístrate en la pestaña 'Registrarse'.");
+    if (!cuentaNube.clave) return showToast("⚠️ Tu cuenta requiere una contraseña nueva. Usa la opción '¿Olvidaste tu contraseña?'");
     if (cuentaNube.clave !== p) return showToast("🔒 Contraseña incorrecta");
 
-    usuarioActivo = u; datosUsuario = cuentaNube;
-    iniciarSesionSistema();
+    usuarioActivo = u; datosUsuario = cuentaNube; iniciarSesionSistema();
 };
 
 function iniciarSesionSistema() {
-    setCookie('mta_session_user', usuarioActivo, 7);
-    setCookie('mta_session_data', JSON.stringify(datosUsuario), 7);
-    setCookie('mta_session_time', Date.now(), 7); 
-
-    document.getElementById('welcome-screen').style.display = 'none';
-    showToast(`👋 ¡Hola, ${datosUsuario.nombres}!`);
-    ejecutarEntrada();
+    setCookie('mta_session_user', usuarioActivo, 7); setCookie('mta_session_data', JSON.stringify(datosUsuario), 7); setCookie('mta_session_time', Date.now(), 7); 
+    document.getElementById('welcome-screen').style.display = 'none'; showToast(`👋 ¡Hola, ${datosUsuario.nombres}!`); ejecutarEntrada();
 }
 
 function ejecutarEntrada() {
-    document.getElementById('welcome-screen').style.display = 'none';
-    document.getElementById('main-nav').style.display = 'flex';
-    document.getElementById('btn-user-dropdown').innerText = `👤 Hola, ${datosUsuario.nombres} ▼`;
-
+    document.getElementById('welcome-screen').style.display = 'none'; document.getElementById('main-nav').style.display = 'flex'; document.getElementById('btn-user-dropdown').innerText = `👤 Hola, ${datosUsuario.nombres} ▼`;
     const dropdown = document.getElementById('user-dropdown');
     if (usuarioActivo === 'admin') {
         document.getElementById('btn-cart-nav').style.display = 'none';
@@ -359,10 +291,7 @@ function ejecutarEntrada() {
         document.getElementById('btn-cart-nav').style.display = 'block';
         dropdown.innerHTML = `<a href="#" onclick="abrirPerfil()">Ver Mi Perfil / Facturas</a><a href="#" style="color: #EF4444;" onclick="cerrarSesion()">Cerrar Sesión</a>`;
     }
-
-    document.getElementById('store-content').style.display = 'block';
-    document.getElementById('admin-page').style.display = 'none';
-    renderProductos(productos);
+    document.getElementById('store-content').style.display = 'block'; document.getElementById('admin-page').style.display = 'none'; renderProductos(productos);
 }
 
 window.cerrarSesion = () => { eraseCookie('mta_session_user'); eraseCookie('mta_session_data'); eraseCookie('mta_session_time'); location.reload(); };
@@ -372,14 +301,12 @@ window.cerrarSesion = () => { eraseCookie('mta_session_user'); eraseCookie('mta_
 // ==========================================
 window.toggleUserMenu = () => { document.getElementById('user-dropdown').classList.toggle('show-dropdown'); };
 document.addEventListener('click', function(event) {
-    const isClickInsideMenu = event.target.closest('#btn-user-dropdown');
-    const dropdown = document.getElementById('user-dropdown');
+    const isClickInsideMenu = event.target.closest('#btn-user-dropdown'); const dropdown = document.getElementById('user-dropdown');
     if (!isClickInsideMenu && dropdown && dropdown.classList.contains('show-dropdown')) dropdown.classList.remove('show-dropdown');
 });
 
 window.abrirPerfil = () => {
-    const dropdown = document.getElementById('user-dropdown');
-    if(dropdown) dropdown.classList.remove('show-dropdown');
+    const dropdown = document.getElementById('user-dropdown'); if(dropdown) dropdown.classList.remove('show-dropdown');
     if(usuarioActivo === 'admin') return showToast("El admin usa el panel principal.");
     
     document.getElementById('perfil-info').innerHTML = `
@@ -389,16 +316,24 @@ window.abrirPerfil = () => {
     `;
 
     const misFacturas = ordenesGlobales.filter(o => o.correo === usuarioActivo);
-    const factBox = document.getElementById('perfil-facturas');
-    factBox.innerHTML = '';
+    const factBox = document.getElementById('perfil-facturas'); factBox.innerHTML = '';
 
     if (misFacturas.length === 0) factBox.innerHTML = `<p style="text-align:center; color:#666;">Aún no tienes pedidos registrados.</p>`;
     else {
         misFacturas.forEach(f => {
             let bsActualizado = f.totalUsd * TASA_BCV;
-            let badgeEntrega = f.entregado ? '<span class="badge-estado badge-verde">✅ Entregado</span>' : '<span class="badge-estado badge-gris">⏳ Prep. Entrega</span>';
-            let badgePago = f.pagado ? '<span class="badge-estado badge-verde">✅ Pagado / Cancelado</span>' : '<span class="badge-estado badge-rojo">❌ Pago Pendiente</span>';
-            factBox.innerHTML += `<div class="historial-item"><strong>Factura #${f.id}</strong> | ${f.fecha} <br><strong>Modalidad:</strong> ${f.metodo.toUpperCase()}<br><strong>Monto (Tasa Hoy):</strong> $${f.totalUsd.toFixed(2)} | ${bsActualizado.toFixed(2)} Bs.<br>${badgeEntrega} ${badgePago}<br><button class="btn-text" style="font-size:0.8rem; margin-top:5px;" onclick="verTicketAntiguo('${f.id}')">🔍 Ver Ticket Detallado</button></div>`;
+            
+            // 🔥 MODIFICACIÓN PARA MOSTRAR SI FUE CANCELADO AL CLIENTE 🔥
+            let estadoHTML = "";
+            if (f.cancelado) {
+                estadoHTML = `<span class="badge-estado badge-rojo" style="display:block; margin-top:5px; white-space:normal;">🚫 CANCELADO: ${f.motivoCancelacion}</span>`;
+            } else {
+                let badgeEntrega = f.entregado ? '<span class="badge-estado badge-verde">✅ Entregado</span>' : '<span class="badge-estado badge-gris">⏳ Prep. Entrega</span>';
+                let badgePago = f.pagado ? '<span class="badge-estado badge-verde">✅ Pagado / Cancelado</span>' : '<span class="badge-estado badge-rojo">❌ Pago Pendiente</span>';
+                estadoHTML = `<br>${badgeEntrega} ${badgePago}`;
+            }
+
+            factBox.innerHTML += `<div class="historial-item"><strong>Factura #${f.id}</strong> | ${f.fecha} <br><strong>Modalidad:</strong> ${f.metodo.toUpperCase()}<br><strong>Monto (Tasa Hoy):</strong> $${f.totalUsd.toFixed(2)} | ${bsActualizado.toFixed(2)} Bs.${estadoHTML}<br><button class="btn-text" style="font-size:0.8rem; margin-top:5px;" onclick="verTicketAntiguo('${f.id}')">🔍 Ver Ticket Detallado</button></div>`;
         });
     }
     document.getElementById('modal-perfil').style.display = 'flex';
@@ -413,21 +348,13 @@ window.verTicketAntiguo = (idFicha) => {
 // 5. Catálogo, Detalle y Carrito
 // ==========================================
 function renderProductos(lista) {
-    const grid = document.getElementById('product-grid');
-    grid.innerHTML = '';
-    
-    // Si la lista está vacía, mostramos un mensaje amigable
+    const grid = document.getElementById('product-grid'); grid.innerHTML = '';
     if(lista.length === 0) {
-        document.getElementById('search-error').style.display = 'block';
-        document.getElementById('search-error').innerHTML = "No hay productos en el inventario de la nube en este momento.";
-        return;
-    } else {
-        document.getElementById('search-error').style.display = 'none';
-    }
+        document.getElementById('search-error').style.display = 'block'; document.getElementById('search-error').innerHTML = "No hay productos en el inventario de la nube en este momento."; return;
+    } else { document.getElementById('search-error').style.display = 'none'; }
 
     lista.forEach(p => {
-        const agotado = p.stock <= 0;
-        const precioBs = (p.precio * TASA_BCV).toFixed(2);
+        const agotado = p.stock <= 0; const precioBs = (p.precio * TASA_BCV).toFixed(2);
         let btnAñadirHtml = '';
         if (usuarioActivo !== 'admin') btnAñadirHtml = `<button type="button" class="btn-primary" ${agotado ? 'disabled' : ''} onclick="agregarAlCarrito(${p.id})">Agregar 🛒</button>`;
         
@@ -467,10 +394,7 @@ window.agregarAlCarrito = (id) => {
     actualizarIconoCarrito();
 };
 
-function actualizarIconoCarrito() {
-    let count = 0; carrito.forEach(i => count += i.qty); document.getElementById('cart-count').innerText = count;
-}
-
+function actualizarIconoCarrito() { let count = 0; carrito.forEach(i => count += i.qty); document.getElementById('cart-count').innerText = count; }
 window.abrirCarrito = () => { renderContenidoCarrito(); document.getElementById('modal-carrito').style.display = 'flex'; };
 
 function renderContenidoCarrito() {
@@ -511,7 +435,6 @@ window.irACheckout = () => {
     document.getElementById('chk-nombres').value = datosUsuario.nombres; document.getElementById('chk-apellidos').value = datosUsuario.apellidos; document.getElementById('chk-ubicacion').value = datosUsuario.area;
     renderResumenCheckout();
 };
-
 window.irAInicio = () => { document.getElementById('checkout-page').style.display = 'none'; document.getElementById('admin-page').style.display = 'none'; document.getElementById('store-content').style.display = 'block'; renderProductos(productos); };
 
 function renderResumenCheckout() {
@@ -533,7 +456,6 @@ window.finalizarCompra = async () => {
 
     carrito.forEach(item => { let prod = productos.find(p => p.id === item.id); if(prod) prod.stock -= item.qty; });
     
-    // Purificamos los datos antes de guardarlos por si acaso
     let unicos = []; let map = new Map();
     for (let item of productos) { if(!map.has(item.id)){ map.set(item.id, true); unicos.push(item); } }
     productos = unicos;
@@ -541,7 +463,7 @@ window.finalizarCompra = async () => {
     await respaldarInventarioEnNube(); 
     localStorage.setItem('mta_productos', JSON.stringify(productos)); 
 
-    const nuevaFacturaGlobal = { id: "MTA" + Date.now().toString().slice(-6), fecha: new Date().toLocaleDateString('es-VE'), hora: new Date().toLocaleTimeString('es-VE'), correo: usuarioActivo, nombres: n, apellidos: a, area: u, items: [...carrito], totalUsd: totalCobrarUsd, metodo: m, pagado: (m === 'contado'), entregado: false };
+    const nuevaFacturaGlobal = { id: "MTA" + Date.now().toString().slice(-6), fecha: new Date().toLocaleDateString('es-VE'), hora: new Date().toLocaleTimeString('es-VE'), correo: usuarioActivo, nombres: n, apellidos: a, area: u, items: [...carrito], totalUsd: totalCobrarUsd, metodo: m, pagado: (m === 'contado'), entregado: false, cancelado: false, motivoCancelacion: "" };
     ordenesGlobales.unshift(nuevaFacturaGlobal); localStorage.setItem('mta_global_orders', JSON.stringify(ordenesGlobales));
 
     if (m === 'credito') {
@@ -657,11 +579,70 @@ window.guardarEdicionAdmin = async () => {
 function renderAdminPedidos() {
     const list = document.getElementById('admin-orders-list'); list.innerHTML = '';
     if (ordenesGlobales.length === 0) { list.innerHTML = `<tr><td colspan="4" style="text-align:center;">No hay pedidos registrados</td></tr>`; return; }
+    
     ordenesGlobales.forEach(o => {
-        let bsActualizado = o.totalUsd * TASA_BCV; let txtEntrega = o.entregado ? 'Marcar NO Entregado' : 'Marcar Entregado'; let colorEntrega = o.entregado ? '#10B981' : '#6B7280'; let txtPago = o.pagado ? 'Marcar como Deuda' : 'Marcar Pagado'; let colorPago = o.pagado ? '#10B981' : '#EF4444'; 
-        list.innerHTML += `<tr><td><strong>#${o.id}</strong><br><span style="font-size:0.75rem; color:#666;">${o.fecha} ${o.hora}</span></td><td><strong>${o.nombres} ${o.apellidos}</strong><br><span style="font-size:0.8rem; color:var(--primary);">${o.area}</span></td><td><strong>$${o.totalUsd.toFixed(2)}</strong><br><span style="font-size:0.75rem;">${bsActualizado.toFixed(2)} Bs</span><br><span style="font-size:0.7rem; font-weight:bold;">${o.metodo.toUpperCase()}</span></td><td><button type="button" class="btn-primary" style="background:${colorEntrega}; padding:5px 10px; font-size:0.75rem; margin-bottom:5px; width: 140px;" onclick="toggleAdminStatus('${o.id}', 'entrega')">${txtEntrega}</button><br><button type="button" class="btn-primary" style="background:${colorPago}; padding:5px 10px; font-size:0.75rem; width: 140px;" onclick="toggleAdminStatus('${o.id}', 'pago')">${txtPago}</button></td></tr>`;
+        let bsActualizado = o.totalUsd * TASA_BCV; 
+        let txtEntrega = o.entregado ? 'Marcar NO Entregado' : 'Marcar Entregado'; 
+        let colorEntrega = o.entregado ? '#10B981' : '#6B7280'; 
+        let txtPago = o.pagado ? 'Marcar como Deuda' : 'Marcar Pagado'; 
+        let colorPago = o.pagado ? '#10B981' : '#EF4444'; 
+        
+        // 🔥 MODIFICACIÓN: Si está cancelado, ocultamos los botones de entregar y pagar 🔥
+        let botonesEstado = "";
+        if (o.cancelado) {
+            botonesEstado = `<span style="color:#EF4444; font-size:0.8rem; font-weight:bold; display:block; margin-top:5px;">🚫 Cancelado: ${o.motivoCancelacion}</span>`;
+        } else {
+            botonesEstado = `
+                <button type="button" class="btn-primary" style="background:${colorEntrega}; padding:5px 10px; font-size:0.75rem; margin-bottom:5px; width: 140px;" onclick="toggleAdminStatus('${o.id}', 'entrega')">${txtEntrega}</button><br>
+                <button type="button" class="btn-primary" style="background:${colorPago}; padding:5px 10px; font-size:0.75rem; width: 140px;" onclick="toggleAdminStatus('${o.id}', 'pago')">${txtPago}</button><br>
+                <button type="button" class="btn-primary" style="background:#EF4444; padding:5px 10px; font-size:0.75rem; width: 140px; margin-top:5px;" onclick="cancelarPedidoAdmin('${o.id}')">🚫 Cancelar</button>
+            `;
+        }
+        
+        list.innerHTML += `<tr><td><strong>#${o.id}</strong><br><span style="font-size:0.75rem; color:#666;">${o.fecha} ${o.hora}</span></td><td><strong>${o.nombres} ${o.apellidos}</strong><br><span style="font-size:0.8rem; color:var(--primary);">${o.area}</span></td><td><strong>$${o.totalUsd.toFixed(2)}</strong><br><span style="font-size:0.75rem;">${bsActualizado.toFixed(2)} Bs</span><br><span style="font-size:0.7rem; font-weight:bold;">${o.metodo.toUpperCase()}</span></td><td>${botonesEstado}</td></tr>`;
     });
 }
+
+// 🔥 NUEVO: Función para que el Admin cancele el pedido 🔥
+window.cancelarPedidoAdmin = async (id) => {
+    let order = ordenesGlobales.find(o => o.id === id);
+    if(order && !order.cancelado) {
+        let motivo = prompt("Indique el motivo de la cancelación para que el cliente lo vea:");
+        if(motivo) {
+            order.cancelado = true;
+            order.motivoCancelacion = motivo;
+
+            // 1. Restaurar inventario en la página
+            order.items.forEach(item => {
+                let prod = productos.find(p => p.id === item.id);
+                if(prod) prod.stock += item.qty;
+            });
+
+            // 2. Guardar el stock restaurado en Drive
+            let unicos = []; let map = new Map();
+            for (let item of productos) { if(!map.has(item.id)){ map.set(item.id, true); unicos.push(item); } }
+            productos = unicos;
+            
+            showToast("⏳ Restaurando inventario y descontando deuda...");
+            await respaldarInventarioEnNube();
+            localStorage.setItem('mta_productos', JSON.stringify(productos));
+
+            // 3. Si era compra a crédito y no había sido pagada, borrar deuda en Drive
+            if(order.metodo === 'credito' && !order.pagado) {
+                await enviarDatosGoogle({ 
+                    action: 'cancelarCompra', 
+                    correo: order.correo, 
+                    totalUsd: order.totalUsd, 
+                    detalles: JSON.stringify(order.items) 
+                });
+            }
+
+            localStorage.setItem('mta_global_orders', JSON.stringify(ordenesGlobales));
+            showToast("✅ Pedido cancelado correctamente.");
+            renderAdminPedidos();
+        }
+    }
+};
 
 window.toggleAdminStatus = async (id, tipo) => {
     let order = ordenesGlobales.find(o => o.id === id);
