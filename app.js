@@ -31,7 +31,6 @@ function getCookie(name) {
 }
 function eraseCookie(name) { document.cookie = name +'=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;'; }
 
-// 🔥 AHORA ESTA FUNCIÓN ESPERA QUE GOOGLE RESPONDA ANTES DE SEGUIR
 async function enviarDatosGoogle(datos) {
     const formData = new URLSearchParams();
     for (const key in datos) { formData.append(key, datos[key]); }
@@ -71,7 +70,7 @@ let diasCobroGlobales = JSON.parse(localStorage.getItem('mta_dias_cobro')) || [1
 let categoriasMTA = JSON.parse(localStorage.getItem('mta_categorias')) || ['Dulce', 'Salado'];
 
 // ==========================================
-// 2. Inicialización Anti-Caché Fuerte
+// 2. Inicialización
 // ==========================================
 window.onload = async () => {
     try {
@@ -178,7 +177,7 @@ window.iniciarRecuperacion = () => {
 
     modoRecuperacion = true;
     pasoVerificacion = true;
-    datosTemporales = { correo: u, clave: nuevaPwd.trim() }; // Trim para seguridad
+    datosTemporales = { correo: u, clave: nuevaPwd.trim() }; 
 
     document.getElementById('password-area').style.display = 'none';
     document.getElementById('remember-area').style.display = 'none';
@@ -199,7 +198,6 @@ window.generarYMostrarCodigoOTP = () => {
     temporizadorOTP = setTimeout(() => { t.remove(); }, 10000); 
 };
 
-// 🔥 PROCESO ASÍNCRONO DE LOGINS Y REGISTROS
 window.procesarAuth = async () => {
     const btn = document.getElementById('btn-auth-action');
     const u = document.getElementById('auth-email').value.trim().toLowerCase(); 
