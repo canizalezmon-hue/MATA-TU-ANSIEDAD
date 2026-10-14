@@ -74,7 +74,6 @@ let categoriasMTA = JSON.parse(localStorage.getItem('mta_categorias')) || ['Dulc
 // ==========================================
 window.onload = async () => {
     try {
-        // 🔥 CORRECCIÓN: Un simple Fetch sin headers personalizados para que Google no lo bloquee.
         const urlFresco = GOOGLE_SHEETS_API + "?t=" + new Date().getTime();
         const respuesta = await fetch(urlFresco);
         const dataNube = await respuesta.json();
@@ -142,7 +141,7 @@ async function obtenerTasaBCV() {
 }
 
 // ==========================================
-// 3. Autenticación y Recuperación
+// 3. Autenticación, Recuperación y UX
 // ==========================================
 window.togglePassword = () => {
     const pwdInput = document.getElementById('auth-password');
@@ -163,7 +162,23 @@ window.cambiarTabAuth = (modo) => {
     document.getElementById('remember-area').style.display = modoRegistro ? 'none' : 'block';
     document.getElementById('verification-area').style.display = 'none';
     document.getElementById('auth-email').style.display = 'block';
+    document.getElementById('email-shortcuts').style.display = 'flex'; // Vuelve a mostrar los atajos
     document.getElementById('btn-auth-action').innerText = modoRegistro ? "Crear Cuenta" : "Entrar";
+};
+
+// 🔥 NUEVO: Función para autocompletar el correo
+window.completarDominio = (dominio) => {
+    const emailInput = document.getElementById('auth-email');
+    let val = emailInput.value.trim();
+    if (val.includes('@')) {
+        val = val.split('@')[0]; // Si ya tiene un @, lo quita para reemplazarlo
+    }
+    if (val !== "") {
+        emailInput.value = val + dominio;
+        document.getElementById('auth-password').focus(); // Salta a la contraseña automáticamente
+    } else {
+        showToast("⚠️ Escribe tu nombre de usuario primero");
+    }
 };
 
 window.iniciarRecuperacion = () => {
@@ -183,6 +198,7 @@ window.iniciarRecuperacion = () => {
     document.getElementById('password-area').style.display = 'none';
     document.getElementById('remember-area').style.display = 'none';
     document.getElementById('auth-email').style.display = 'none';
+    document.getElementById('email-shortcuts').style.display = 'none';
     document.getElementById('verification-area').style.display = 'block';
     document.getElementById('btn-auth-action').innerText = "Verificar Código de Cambio";
 
@@ -237,6 +253,7 @@ window.procesarAuth = async () => {
             const tel = document.getElementById('reg-telefono').value.trim();
 
             if(!nom || !ape || !area || !tel || !u || !p) return showToast("⚠️ Completa todos los campos");
+            if(!u.includes('@')) return showToast("⚠️ Por favor ingresa un correo válido");
             
             const existeEnNube = usuariosDeLaNube.find(usr => usr.correo === u);
             if(existeEnNube) return showToast("❌ Correo ya registrado en el sistema");
@@ -246,6 +263,7 @@ window.procesarAuth = async () => {
 
             document.getElementById('register-fields').style.display = 'none';
             document.getElementById('auth-email').style.display = 'none';
+            document.getElementById('email-shortcuts').style.display = 'none';
             document.getElementById('password-area').style.display = 'none';
             document.getElementById('verification-area').style.display = 'block';
             btn.innerText = "Verificar Código";

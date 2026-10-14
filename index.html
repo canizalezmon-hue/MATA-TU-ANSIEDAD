@@ -32,7 +32,14 @@
                     <input type="tel" id="reg-telefono" class="input-form" placeholder="Teléfono de Contacto">
                 </div>
                 
-                <input type="email" id="auth-email" class="input-form" placeholder="Correo electrónico">
+                <input type="email" id="auth-email" class="input-form" placeholder="Correo electrónico" style="margin-bottom: 8px;">
+                
+                <!-- 🔥 BOTONES RÁPIDOS DE DOMINIO 🔥 -->
+                <div id="email-shortcuts" style="display: flex; gap: 8px; justify-content: center; margin-bottom: 15px; flex-wrap: wrap;">
+                    <button type="button" class="btn-text" style="font-size: 0.75rem; background: #f3f4f6; padding: 5px 12px; border-radius: 12px; color: #555; border: 1px solid #ddd;" onclick="completarDominio('@gmail.com')">@gmail.com</button>
+                    <button type="button" class="btn-text" style="font-size: 0.75rem; background: #f3f4f6; padding: 5px 12px; border-radius: 12px; color: #555; border: 1px solid #ddd;" onclick="completarDominio('@hotmail.com')">@hotmail.com</button>
+                    <button type="button" class="btn-text" style="font-size: 0.75rem; background: #f3f4f6; padding: 5px 12px; border-radius: 12px; color: #555; border: 1px solid #ddd;" onclick="completarDominio('@outlook.com')">@outlook.com</button>
+                </div>
                 
                 <div id="password-area" style="position: relative;">
                     <input type="password" id="auth-password" class="input-form" placeholder="Contraseña" style="padding-right: 40px; margin-bottom: 5px;">
@@ -51,7 +58,6 @@
                 
                 <div id="verification-area" style="display: none;">
                     <p style="font-size: 0.85rem; font-weight: bold; margin-bottom: 10px; color: var(--primary);">Ingresa el código de 6 dígitos:</p>
-                    <!-- 🔥 AQUÍ ESTÁ EL CAMBIO PARA EL TECLADO NUMÉRICO EN CELULARES 🔥 -->
                     <input type="text" id="auth-code" inputmode="numeric" pattern="[0-9]*" class="input-form" placeholder="Ej: 123456" maxlength="6">
                     <button class="btn-text" onclick="generarYMostrarCodigoOTP()" style="font-size: 0.85rem; margin-bottom: 15px; width: 100%; text-align: center;">¿No viste el código? Generar otro</button>
                 </div>
@@ -177,6 +183,7 @@
         </div>
     </div>
 
+    <!-- Modales -->
     <div id="modal-admin-editar" class="modal">
         <div class="modal-content" style="max-width: 600px;">
             <span class="close" onclick="cerrarModales()">×</span>
