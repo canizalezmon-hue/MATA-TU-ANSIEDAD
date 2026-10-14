@@ -118,7 +118,6 @@
                 <button class="btn-primary" style="padding:8px 15px; font-size:0.9rem; background:#3B82F6;" onclick="cambiarSeccionAdmin('pedidos')">🧾 Pedidos</button>
                 <button class="btn-primary" style="padding:8px 15px; font-size:0.9rem; background:#10B981;" onclick="cambiarSeccionAdmin('usuarios')">👥 Usuarios</button>
                 <button class="btn-primary" style="padding:8px 15px; font-size:0.9rem; background:#F59E0B;" onclick="cambiarSeccionAdmin('deudas')">💰 Deudas</button>
-                <!-- 🔥 NUEVA PESTAÑA: REPORTES 🔥 -->
                 <button class="btn-primary" style="padding:8px 15px; font-size:0.9rem; background:#06B6D4;" onclick="cambiarSeccionAdmin('reportes')">📊 Reportes CSV</button>
                 <button class="btn-primary" style="padding:8px 15px; font-size:0.9rem; background:#8B5CF6;" onclick="cambiarSeccionAdmin('config')">⚙️ Ajustes</button>
             </div>
@@ -192,12 +191,27 @@
             </div>
         </div>
 
-        <!-- 🔥 NUEVA PESTAÑA: REPORTES 🔥 -->
+        <!-- 🔥 PESTAÑA MEJORADA DE REPORTES 🔥 -->
         <div id="admin-seccion-reportes" style="display:none;">
             <div class="modern-card animate-entry" style="margin-bottom: 20px; text-align: center;">
-                <h3 style="color:var(--primary); margin-bottom:10px;">📊 Historial de Pagos</h3>
-                <p style="color:var(--text-sub); margin-bottom:20px;">Descarga la lista de todos los pagos que has marcado como "Saldados" para llevar tu control quincenal en Excel.</p>
-                <button class="btn-primary btn-large" style="background:#06B6D4; max-width: 300px; margin: 0 auto;" onclick="descargarPagosCSV()">⬇️ Descargar Reporte en Excel (CSV)</button>
+                <h3 style="color:var(--primary); margin-bottom:10px;">📊 Contabilidad y Reportes</h3>
+                <p style="color:var(--text-sub); margin-bottom:15px;">Filtra por fechas para agrupar los pagos por cliente y descargar el Excel contable.</p>
+                
+                <div style="display: flex; gap: 15px; justify-content: center; margin-bottom: 20px; flex-wrap: wrap;">
+                    <div style="display: flex; flex-direction: column; text-align: left;">
+                        <label style="font-size: 0.8rem; font-weight: bold; color: var(--text-sub);">Desde:</label>
+                        <input type="date" id="reporte-inicio" class="input-form" style="margin-bottom: 0;">
+                    </div>
+                    <div style="display: flex; flex-direction: column; text-align: left;">
+                        <label style="font-size: 0.8rem; font-weight: bold; color: var(--text-sub);">Hasta:</label>
+                        <input type="date" id="reporte-fin" class="input-form" style="margin-bottom: 0;">
+                    </div>
+                </div>
+                
+                <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
+                    <button class="btn-primary btn-large" style="background:#8B5CF6; flex: 1; max-width: 200px;" onclick="renderAdminReportes()">🔍 Filtrar en Pantalla</button>
+                    <button class="btn-primary btn-large" style="background:#06B6D4; flex: 1; max-width: 250px;" onclick="descargarPagosCSV()">⬇️ Descargar Reporte en Excel</button>
+                </div>
             </div>
             <div class="checkout-box animate-entry" style="overflow-x: auto; padding:0;">
                 <table class="admin-table">
