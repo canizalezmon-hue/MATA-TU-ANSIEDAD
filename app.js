@@ -70,7 +70,6 @@ let categoriasMTA = JSON.parse(localStorage.getItem('mta_categorias')) || ['Dulc
 // 🔥 FUNCIÓN DE ESQUELETOS CORREGIDA
 // ==========================================
 function mostrarEsqueletos() {
-    // ELIMINADO: Ya no ocultamos las categorías, se quedan visibles al instante
     const grid = document.getElementById('product-grid');
     if (grid) {
         grid.innerHTML = '';
@@ -865,33 +864,71 @@ window.eliminarUsuarioAdmin = async (correo) => {
 // ==========================================
 // 9. Pedidos y Configuración Admin
 // ==========================================
+
 function renderAdminPedidos() {
     const list = document.getElementById('admin-orders-list'); list.innerHTML = '';
     if (ordenesGlobales.length === 0) { list.innerHTML = `<tr><td colspan="4" style="text-align:center;">No hay pedidos registrados</td></tr>`; return; }
     
     ordenesGlobales.forEach(o => {
         let bsActualizado = o.totalUsd * TASA_BCV; 
-        let txtEntrega = o.entregado ? 'Marcar NO Entregado' : 'Marcar Entregado'; 
-        let colorEntrega = o.entregado ? '#10B981' : '#6B7280'; 
-        let txtPago = o.pagado ? 'Marcar como Deuda' : 'Marcar Pagado'; 
-        let colorPago = o.pagado ? '#10B981' : '#EF4444'; 
         
         let botonesEstado = "";
         if (o.cancelado) {
             botonesEstado = `<span style="color:#EF4444; font-size:0.8rem; font-weight:bold; display:block; margin-top:5px;">🚫 Cancelado: ${o.motivoCancelacion}</span>`;
         } else {
-            botonesEstado = `
-                <button type="button" class="btn-primary" style="background:${colorEntrega}; padding:5px 10px; font-size:0.75rem; margin-bottom:5px; width: 140px;" onclick="toggleAdminStatus('${o.id}', 'entrega')">${txtEntrega}</button><br>
-                <button type="button" class="btn-primary" style="background:${colorPago}; padding:5px 10px; font-size:0.75rem; width: 140px;" onclick="toggleAdminStatus('${o.id}', 'pago')">${txtPago}</button><br>
-                <button type="button" class="btn-primary" style="background:#EF4444; padding:5px 10px; font-size:0.75rem; width: 140px; margin-top:5px;" onclick="cancelarPedidoAdmin('${o.id}')">🚫 Cancelar</button>
-            `;
+            let txtEntrega = o.entregado ? '✅ Entregado' : '🚚 Marcar Entregado'; 
+            let colorEntrega = o.entregado ? '#10B981' : '#6B7280'; 
+            let btnEntrega = `<button type="button" class="btn-primary" style="background:${colorEntrega}; padding:5px 10px; font-size:0.75rem; margin-bottom:5px; width: 140px;" onclick="toggleAdminStatus('${o.id}', 'entrega')">${txtEntrega}</button><br>`;
+            
+            let btnPago = "";
+            if (o.pagado) {
+                btnPago = `<button type="button" class="btn-primary" style="background:#10B981; padding:5px 10px; font-size:0.75rem; width: 140px; margin-bottom:5px; cursor:not-allowed;" disabled>✅ Pagado</button><br>`;
+            } else {
+                btnPago = `<button type="button" class="btn-primary" style="background:#F59E0B; padding:5px 10px; font-size:0.75rem; width: 140px; margin-bottom:5px;" onclick="pagarPedidoDesdeAdmin('${o.id}')">💰 Marcar Pagado</button><br>`;
+            }
+
+            let btnCancelar = `<button type="button" class="btn-primary" style="background:#EF4444; padding:5px 10px; font-size:0.75rem; width: 140px; margin-top:5px;" onclick="cancelarPedidoAdmin('${o.id}')">🚫 Cancelar</button>`;
+            
+            botonesEstado = btnEntrega + btnPago + btnCancelar;
         }
         
         list.innerHTML += `<tr><td><strong>#${o.id}</strong><br><span style="font-size:0.75rem; color:#666;">${o.fecha} ${o.hora}</span></td><td><strong>${o.nombres} ${o.apellidos}</strong><br><span style="font-size:0.8rem; color:var(--primary);">${o.area}</span></td><td><strong>$${o.totalUsd.toFixed(2)}</strong><br><span style="font-size:0.75rem;">${bsActualizado.toFixed(2)} Bs</span><br><span style="font-size:0.7rem; font-weight:bold;">${o.metodo.toUpperCase()}</span></td><td>${botonesEstado}</td></tr>`;
     });
 }
 
-// 🔥 FUNCIÓN DE CANCELAR REVISADA 🔥
+window.pagarPedidoDesdeAdmin = async (id) => {
+    let order = ordenesGlobales.find(o => o.id === id);
+    if(order && !order.pagado) {
+        if(confirm(`¿Confirmas que el cliente pagó $${order.totalUsd.toFixed(2)} por este pedido?\n\nAl aceptar, esto se descontará de su deuda y pasará a los Reportes CSV.`)) {
+            showToast("⏳ Procesando pago en la base de datos...");
+            
+            await enviarDatosGoogle({ 
+                action: 'pagarPedidoEspecifico', 
+                correo: order.correo, 
+                monto: order.totalUsd,
+                nombre: order.nombres + " " + order.apellidos
+            });
+
+            order.pagado = true;
+            localStorage.setItem('mta_global_orders', JSON.stringify(ordenesGlobales)); 
+            showToast("✅ Pago registrado. El cliente ya puede ver su recibo como Pagado.");
+            renderAdminPedidos();
+        }
+    }
+};
+
+window.toggleAdminStatus = async (id, tipo) => {
+    let order = ordenesGlobales.find(o => o.id === id);
+    if(order) {
+        if(tipo === 'entrega') {
+            order.entregado = !order.entregado;
+            showToast(order.entregado ? "✅ Pedido marcado como Entregado" : "⏳ Pedido marcado como NO Entregado");
+        }
+        localStorage.setItem('mta_global_orders', JSON.stringify(ordenesGlobales)); 
+        renderAdminPedidos();
+    }
+};
+
 window.cancelarPedidoAdmin = async (id) => {
     let order = ordenesGlobales.find(o => o.id === id);
     if(order && !order.cancelado) {
@@ -920,18 +957,6 @@ window.cancelarPedidoAdmin = async (id) => {
                 window.open(`https://wa.me/${telefonoCliente}?text=${txtCancelacion}`, '_blank');
             } else { showToast("⚠️ El usuario no tiene un teléfono registrado para notificar por WhatsApp."); }
         }
-    }
-};
-
-window.toggleAdminStatus = async (id, tipo) => {
-    let order = ordenesGlobales.find(o => o.id === id);
-    if(order) {
-        if(tipo === 'entrega') order.entregado = !order.entregado;
-        if(tipo === 'pago') {
-            order.pagado = !order.pagado;
-            if(order.pagado) await enviarDatosGoogle({ action: 'marcarPagado', correo: order.correo });
-        }
-        localStorage.setItem('mta_global_orders', JSON.stringify(ordenesGlobales)); showToast("Estado actualizado correctamente 🔄"); renderAdminPedidos();
     }
 };
 
