@@ -70,7 +70,7 @@ let diasCobroGlobales = JSON.parse(localStorage.getItem('mta_dias_cobro')) || [1
 let categoriasMTA = JSON.parse(localStorage.getItem('mta_categorias')) || ['Dulce', 'Salado'];
 
 // ==========================================
-// 2. Inicialización
+// 2. Inicialización y Purificador de Duplicados
 // ==========================================
 window.onload = async () => {
     try {
@@ -78,14 +78,29 @@ window.onload = async () => {
         const respuesta = await fetch(urlFresco);
         const dataNube = await respuesta.json();
         
-        if(dataNube.inventario && dataNube.inventario.length > 0) productos = dataNube.inventario;
-        else respaldarInventarioEnNube(); 
+        if(dataNube.inventario && dataNube.inventario.length > 0) {
+            // 🔥 FILTRO PURIFICADOR DE DUPLICADOS FRONTEND 🔥
+            let unicos = [];
+            let map = new Map();
+            for (let item of dataNube.inventario) {
+                if(!map.has(item.id)){
+                    map.set(item.id, true);
+                    unicos.push(item);
+                }
+            }
+            productos = unicos;
+        } else {
+            respaldarInventarioEnNube(); 
+        }
         
         if(dataNube.clientes) usuariosDeLaNube = dataNube.clientes;
         
     } catch(e) {
         console.log("Trabajando en modo local por error de red.");
-        productos = JSON.parse(localStorage.getItem('mta_productos')) || catalogoBase;
+        let localProds = JSON.parse(localStorage.getItem('mta_productos')) || catalogoBase;
+        let unicos = []; let map = new Map();
+        for (let item of localProds) { if(!map.has(item.id)){ map.set(item.id, true); unicos.push(item); } }
+        productos = unicos;
     }
 
     await obtenerTasaBCV(); 
@@ -99,7 +114,8 @@ window.onload = async () => {
             document.getElementById('auth-email').value = correoGuardado; 
             if(passGuardado) {
                 document.getElementById('auth-password').value = passGuardado;
-                document.getElementById('remember-me').checked = true;
+                const check = document.getElementById('remember-me');
+                if(check) check.checked = true;
             }
         }
     }
@@ -163,7 +179,6 @@ window.cambiarTabAuth = (modo) => {
     document.getElementById('verification-area').style.display = 'none';
     document.getElementById('auth-email').style.display = 'block';
     
-    // 🔥 CAMBIO: Los atajos de correo SOLO aparecen en "Registrarse" 🔥
     document.getElementById('email-shortcuts').style.display = modoRegistro ? 'flex' : 'none';
     
     document.getElementById('btn-auth-action').innerText = modoRegistro ? "Crear Cuenta" : "Entrar";
@@ -221,7 +236,8 @@ window.procesarAuth = async () => {
     const btn = document.getElementById('btn-auth-action');
     const u = document.getElementById('auth-email').value.trim().toLowerCase(); 
     const p = document.getElementById('auth-password').value.trim();
-    const remember = document.getElementById('remember-me') ? document.getElementById('remember-me').checked : false;
+    const checkEl = document.getElementById('remember-me');
+    const remember = checkEl ? checkEl.checked : false;
 
     if (modoRecuperacion) {
         const codeInput = document.getElementById('auth-code').value.trim();
@@ -506,10 +522,20 @@ function renderResumenCheckout() {
 }
 
 window.finalizarCompra = async () => {
+    // 🔥 Bloqueamos el botón temporalmente para que nadie mande 2 compras por error
+    const btnComprar = document.querySelector('#checkout-page .checkout-box .btn-primary');
+    if(btnComprar) { btnComprar.innerText = "⏳ Procesando Pedido..."; btnComprar.style.pointerEvents = "none"; }
+
     const n = document.getElementById('chk-nombres').value; const a = document.getElementById('chk-apellidos').value; const u = document.getElementById('chk-ubicacion').value; const m = document.getElementById('chk-metodo').value;
     const { totalCobrarUsd, totalCobrarBs } = renderResumenCheckout();
 
     carrito.forEach(item => { let prod = productos.find(p => p.id === item.id); if(prod) prod.stock -= item.qty; });
+    
+    // Purificamos los datos antes de guardarlos por si acaso
+    let unicos = []; let map = new Map();
+    for (let item of productos) { if(!map.has(item.id)){ map.set(item.id, true); unicos.push(item); } }
+    productos = unicos;
+
     await respaldarInventarioEnNube(); 
     localStorage.setItem('mta_productos', JSON.stringify(productos)); 
 
@@ -519,6 +545,8 @@ window.finalizarCompra = async () => {
     if (m === 'credito') {
         await enviarDatosGoogle({ action: 'nuevaCompra', correo: usuarioActivo, nombres: n + " " + a, totalUsd: totalCobrarUsd, detalles: JSON.stringify(carrito) });
     }
+
+    if(btnComprar) { btnComprar.innerText = "Enviar Pedido al Líder"; btnComprar.style.pointerEvents = "auto"; }
 
     generarTicketHTML(n, a, u, m, totalCobrarUsd, totalCobrarBs, carrito);
     
