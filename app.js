@@ -12,7 +12,7 @@ let usuariosDeLaNube = [];
 let productos = [];
 let deudasGlobales = []; 
 let pagosGlobales = []; 
-let categoriaActual = 'Todas'; // 🔥 NUEVO: Para saber qué filtro está activo
+let categoriaActual = 'Todas'; 
 
 function setCookie(name, value, days) {
     let expires = "";
@@ -67,9 +67,56 @@ let diasCobroGlobales = JSON.parse(localStorage.getItem('mta_dias_cobro')) || [1
 let categoriasMTA = JSON.parse(localStorage.getItem('mta_categorias')) || ['Dulce', 'Salado'];
 
 // ==========================================
+// 🔥 FUNCIÓN DE ESQUELETOS CORREGIDA
+// ==========================================
+function mostrarEsqueletos() {
+    // ELIMINADO: Ya no ocultamos las categorías, se quedan visibles al instante
+    const grid = document.getElementById('product-grid');
+    if (grid) {
+        grid.innerHTML = '';
+        for (let i = 0; i < 6; i++) {
+            grid.innerHTML += `
+                <div class="skeleton-card">
+                    <div class="skeleton-img"></div>
+                    <div class="skeleton-title"></div>
+                    <div class="skeleton-price"></div>
+                    <div class="skeleton-price" style="width: 30%;"></div>
+                    <div class="skeleton-btn-load"></div>
+                </div>`;
+        }
+    }
+}
+
+// ==========================================
 // 2. Inicialización
 // ==========================================
 window.onload = async () => {
+    // 1. Mostrar estructura inmediata al usuario que ya tiene sesión
+    if (usuarioActivo) {
+        document.getElementById('welcome-screen').style.display = 'none';
+        document.getElementById('main-nav').style.display = 'flex';
+        document.getElementById('btn-user-dropdown').innerText = `👤 Cargando... ▼`;
+        
+        if (usuarioActivo !== 'admin' && usuarioActivo !== 'administrador@matatuansiedad.com') {
+            document.getElementById('store-content').style.display = 'block';
+            renderCategorias(); // Aparecen las categorías INSTANTÁNEAMENTE
+            mostrarEsqueletos(); // Aparece la animación gris SOLAMENTE donde van los productos
+        } else {
+            document.getElementById('admin-page').style.display = 'block';
+        }
+    } else {
+        document.getElementById('welcome-screen').style.display = 'flex';
+        if(correoGuardado) {
+            document.getElementById('auth-email').value = correoGuardado; 
+            if(passGuardado) {
+                document.getElementById('auth-password').value = passGuardado;
+                const check = document.getElementById('remember-me');
+                if(check) check.checked = true;
+            }
+        }
+    }
+
+    // 2. Ir a buscar datos reales a la nube
     try {
         const urlFresco = GOOGLE_SHEETS_API + "?t=" + new Date().getTime();
         const respuesta = await fetch(urlFresco);
@@ -95,32 +142,18 @@ window.onload = async () => {
     verificarAlarmaCobro(); 
     verificarExpiracionSesion();
 
+    // 3. Ya llegaron los datos: Reemplazar esqueletos por datos reales
     if (usuarioActivo) {
         let usuarioVerificado = usuariosDeLaNube.find(u => u.correo === usuarioActivo);
         if(usuarioVerificado && usuarioVerificado.estado === 'Bloqueado') {
             showToast(`🚫 TU CUENTA FUE BLOQUEADA.<br>Motivo: ${usuarioVerificado.motivo}`);
             cerrarSesion();
         } else {
-            ejecutarEntrada();
-        }
-    }
-    else {
-        document.getElementById('welcome-screen').style.display = 'flex';
-        if(correoGuardado) {
-            document.getElementById('auth-email').value = correoGuardado; 
-            if(passGuardado) {
-                document.getElementById('auth-password').value = passGuardado;
-                const check = document.getElementById('remember-me');
-                if(check) check.checked = true;
-            }
+            ejecutarEntrada(); // Refresca pantalla con datos
         }
     }
 
-    // 🔥 MODIFICADO: Ahora la barra de búsqueda llama al filtro combinado 🔥
-    document.getElementById('input-search').addEventListener('input', () => {
-        aplicarFiltrosGlobales();
-    });
-
+    document.getElementById('input-search').addEventListener('input', () => { aplicarFiltrosGlobales(); });
     document.getElementById('chk-metodo').addEventListener('change', renderResumenCheckout);
 };
 
@@ -152,9 +185,6 @@ async function obtenerTasaBCV() {
     } catch (e) { document.getElementById('tasa-bcv-display').innerText = TASA_BCV.toFixed(2) + " (Aprox)"; }
 }
 
-// ==========================================
-// 2.B CREADOR DINÁMICO DE CATEGORÍAS (NUEVO)
-// ==========================================
 function obtenerEmojiCategoria(cat) {
     const c = cat.toLowerCase();
     if(c.includes('dulce') || c.includes('chocolate')) return '🍫';
@@ -164,17 +194,15 @@ function obtenerEmojiCategoria(cat) {
     if(c.includes('postre') || c.includes('torta') || c.includes('cake')) return '🍰';
     if(c.includes('salud') || c.includes('sano')) return '🍎';
     if(c.includes('cafe') || c.includes('café')) return '☕';
-    return '🏷️'; // Emoji por defecto si no reconoce la palabra
+    return '🏷️'; 
 }
 
 function renderCategorias() {
     const container = document.getElementById('category-filters');
     if(!container) return;
     
-    // El botón principal de "Todas"
     let html = `<button class="cat-btn active" onclick="filtrarPorCategoria('Todas', this)">🍬 Todas</button>`;
     
-    // Botones dinámicos para cada categoría que exista en categoriasMTA
     categoriasMTA.forEach(cat => {
         let emoji = obtenerEmojiCategoria(cat);
         html += `<button class="cat-btn" onclick="filtrarPorCategoria('${cat}', this)">${emoji} ${cat}</button>`;
@@ -185,28 +213,16 @@ function renderCategorias() {
 
 window.filtrarPorCategoria = (cat, btnElement) => {
     categoriaActual = cat;
-    
-    // Cambia el estilo del botón seleccionado
     document.querySelectorAll('.cat-btn').forEach(btn => btn.classList.remove('active'));
     if(btnElement) btnElement.classList.add('active');
-    
     aplicarFiltrosGlobales();
 };
 
 function aplicarFiltrosGlobales() {
     const query = document.getElementById('input-search').value.toLowerCase();
     let filtrados = productos;
-    
-    // Primero filtra por la categoría seleccionada (si no es "Todas")
-    if(categoriaActual !== 'Todas') {
-        filtrados = filtrados.filter(p => p.cat === categoriaActual);
-    }
-    
-    // Luego filtra por lo que la persona haya escrito
-    if(query) {
-        filtrados = filtrados.filter(p => p.nombre.toLowerCase().includes(query));
-    }
-    
+    if(categoriaActual !== 'Todas') { filtrados = filtrados.filter(p => p.cat === categoriaActual); }
+    if(query) { filtrados = filtrados.filter(p => p.nombre.toLowerCase().includes(query)); }
     renderProductos(filtrados);
 }
 
@@ -338,20 +354,26 @@ function iniciarSesionSistema() {
 }
 
 function ejecutarEntrada() {
-    document.getElementById('welcome-screen').style.display = 'none'; document.getElementById('main-nav').style.display = 'flex'; document.getElementById('btn-user-dropdown').innerText = `👤 Hola, ${datosUsuario.nombres} ▼`;
+    document.getElementById('welcome-screen').style.display = 'none'; 
+    document.getElementById('main-nav').style.display = 'flex'; 
+    document.getElementById('btn-user-dropdown').innerText = `👤 Hola, ${datosUsuario.nombres} ▼`;
     const dropdown = document.getElementById('user-dropdown');
-    if (usuarioActivo === 'admin') {
+    
+    if (usuarioActivo === 'admin' || usuarioActivo === 'administrador@matatuansiedad.com') {
         document.getElementById('btn-cart-nav').style.display = 'none';
         dropdown.innerHTML = `<a href="#" onclick="abrirPanelAdmin()">⚙️ Panel Administrativo</a><a href="#" style="color: #EF4444;" onclick="cerrarSesion()">Cerrar Sesión</a>`;
+        document.getElementById('admin-page').style.display = 'block';
+        document.getElementById('store-content').style.display = 'none'; 
+        cambiarSeccionAdmin('inventario');
     } else {
         document.getElementById('btn-cart-nav').style.display = 'block';
         dropdown.innerHTML = `<a href="#" onclick="abrirPerfil()">Ver Mi Perfil / Facturas</a><a href="#" style="color: #EF4444;" onclick="cerrarSesion()">Cerrar Sesión</a>`;
+        document.getElementById('admin-page').style.display = 'none'; 
+        document.getElementById('store-content').style.display = 'block'; 
+        
+        renderCategorias(); 
+        aplicarFiltrosGlobales(); 
     }
-    document.getElementById('store-content').style.display = 'block'; document.getElementById('admin-page').style.display = 'none'; 
-    
-    // 🔥 DIBUJA LAS CATEGORÍAS ANTES DE LOS PRODUCTOS 🔥
-    renderCategorias(); 
-    aplicarFiltrosGlobales(); 
 }
 
 window.cerrarSesion = () => { eraseCookie('mta_session_user'); eraseCookie('mta_session_data'); eraseCookie('mta_session_time'); location.reload(); };
@@ -367,7 +389,7 @@ document.addEventListener('click', function(event) {
 
 window.abrirPerfil = () => {
     const dropdown = document.getElementById('user-dropdown'); if(dropdown) dropdown.classList.remove('show-dropdown');
-    if(usuarioActivo === 'admin') return showToast("El admin usa el panel principal.");
+    if(usuarioActivo === 'admin' || usuarioActivo === 'administrador@matatuansiedad.com') return showToast("El admin usa el panel principal.");
     
     document.getElementById('perfil-info').innerHTML = `
         <p style="margin-bottom:5px;"><strong>Nombres:</strong> ${datosUsuario.nombres} ${datosUsuario.apellidos}</p>
@@ -399,7 +421,13 @@ window.abrirPerfil = () => {
 
 window.verTicketAntiguo = (idFicha) => {
     const f = ordenesGlobales.find(x => x.id === idFicha);
-    if(f) { let bsActualizado = f.totalUsd * TASA_BCV; generarTicketHTML(f.nombres, f.apellidos, f.area, f.metodo, f.totalUsd, bsActualizado, f.items); }
+    if(f) { 
+        let bsActualizado = f.totalUsd * TASA_BCV; 
+        let txtWa = `🍬 *MATA TU ANSIEDAD - RECIBO DE PEDIDO*%0A%0A👤 *Cliente:* ${f.nombres} ${f.apellidos}%0A📍 *Ubicación:* ${f.area}%0A💳 *Pago:* ${f.metodo === 'contado' ? 'De Contado' : 'Crédito Quincena'}%0A%0A*🛒 DETALLE:*%0A`;
+        f.items.forEach(i => txtWa += `- ${i.nombre} (x${i.qty})%0A`);
+        txtWa += `%0A💰 *TOTAL:* $${f.totalUsd.toFixed(2)} / ${bsActualizado.toFixed(2)} Bs.`;
+        generarTicketHTML(f.nombres, f.apellidos, f.area, f.metodo, f.totalUsd, bsActualizado, f.items, txtWa); 
+    }
 };
 
 // ==========================================
@@ -411,14 +439,14 @@ function renderProductos(lista) {
         document.getElementById('search-error').style.display = 'block'; 
         document.getElementById('search-error').innerHTML = "🕵️ ¡Ups! Parece que no hay antojos con ese nombre o en esa categoría."; 
         return;
-    } else { 
-        document.getElementById('search-error').style.display = 'none'; 
-    }
+    } else { document.getElementById('search-error').style.display = 'none'; }
 
     lista.forEach(p => {
         const agotado = p.stock <= 0; const precioBs = (p.precio * TASA_BCV).toFixed(2);
         let btnAñadirHtml = '';
-        if (usuarioActivo !== 'admin') btnAñadirHtml = `<button type="button" class="btn-primary" ${agotado ? 'disabled' : ''} onclick="agregarAlCarrito(${p.id})">Agregar 🛒</button>`;
+        if (usuarioActivo !== 'admin' && usuarioActivo !== 'administrador@matatuansiedad.com') {
+            btnAñadirHtml = `<button type="button" class="btn-primary" ${agotado ? 'disabled' : ''} onclick="agregarAlCarrito(${p.id})">Agregar 🛒</button>`;
+        }
         
         grid.innerHTML += `
             <div class="product-card ${agotado ? 'agotado' : ''}">
@@ -437,7 +465,9 @@ window.abrirDetalle = (id) => {
     const p = productos.find(x => x.id === id); if(!p) return;
     const precioMostrarUsd = `$${p.precio.toFixed(2)} USD`; const precioMostrarBs = `${(p.precio * TASA_BCV).toFixed(2)} Bs`;
     let btnAñadirHtml = '';
-    if (usuarioActivo !== 'admin') btnAñadirHtml = `<button type="button" class="btn-primary" ${p.stock <= 0 ? 'disabled' : ''} onclick="agregarAlCarrito(${p.id}); cerrarModales();" style="width: 100%;">${p.stock <= 0 ? 'Agotado' : 'Añadir al Carrito 🛒'}</button>`;
+    if (usuarioActivo !== 'admin' && usuarioActivo !== 'administrador@matatuansiedad.com') {
+        btnAñadirHtml = `<button type="button" class="btn-primary" ${p.stock <= 0 ? 'disabled' : ''} onclick="agregarAlCarrito(${p.id}); cerrarModales();" style="width: 100%;">${p.stock <= 0 ? 'Agotado' : 'Añadir al Carrito 🛒'}</button>`;
+    }
     
     document.getElementById('detalle-body').innerHTML = `
         <div class="img-zoom-container"><img src="${p.img}" class="img-zoom"></div>
@@ -509,6 +539,7 @@ function renderResumenCheckout() {
     return { totalCobrarUsd, totalCobrarBs, metodo };
 }
 
+// 🔥 SE ELIMINÓ EL CLIC FANTASMA Y SE PUSO BOTÓN WHATSAPP EXPLÍCITO 🔥
 window.finalizarCompra = async () => {
     const btnComprar = document.querySelector('#checkout-page .checkout-box .btn-primary');
     if(btnComprar) { btnComprar.innerText = "⏳ Procesando Pedido..."; btnComprar.style.pointerEvents = "none"; }
@@ -534,18 +565,28 @@ window.finalizarCompra = async () => {
 
     if(btnComprar) { btnComprar.innerText = "Enviar Pedido al Líder"; btnComprar.style.pointerEvents = "auto"; }
 
-    generarTicketHTML(n, a, u, m, totalCobrarUsd, totalCobrarBs, carrito);
-    
     let txt = `🍬 *MATA TU ANSIEDAD - NUEVO PEDIDO*%0A%0A👤 *Cliente:* ${n} ${a}%0A📍 *Ubicación:* ${u}%0A💳 *Pago:* ${m === 'contado' ? 'De Contado' : 'Crédito Quincena'}%0A%0A*🛒 DETALLE:*%0A`;
     carrito.forEach(i => txt += `- ${i.nombre} (x${i.qty})%0A`);
     txt += `%0A💰 *TOTAL:* $${totalCobrarUsd.toFixed(2)} / ${totalCobrarBs.toFixed(2)} Bs.%0A%0A*MATA TU ANSIEDAD, TU PEDIDO HA SIDO RECIBIDO EXITOSAMENTE. POR FAVOR, TENGAN EN CUENTA QUE LAS HORAS DE ENTREGA VAN A SER DE 7 DE LA MAÑANA SOLAMENTE Y 7:30 DE LA NOCHE, NO MÁS.*%0A%0A*POR FAVOR, MANTENER ESTO EN DISCRECIÓN, NO IR AL ÁREA DE FARMACIA A COMUNICARLO, TODO POR EL GRUPO DE WHATSAPP.*`;
 
-    carrito = []; actualizarIconoCarrito(); setTimeout(() => { window.open(`https://wa.me/${NUMERO_LIDER_WHATSAPP}?text=${txt}`, '_blank'); }, 3000);
+    generarTicketHTML(n, a, u, m, totalCobrarUsd, totalCobrarBs, carrito, txt);
+    carrito = []; actualizarIconoCarrito(); 
 };
 
-function generarTicketHTML(nom, ape, ubi, metodo, tUsd, tBs, itemsTicket) {
+function generarTicketHTML(nom, ape, ubi, metodo, tUsd, tBs, itemsTicket, txtWhatsapp) {
     const tContent = document.getElementById('ticket-content'); let itemsStr = itemsTicket.map(i => `<tr><td>${i.qty}x ${i.nombre}</td><td style="text-align:right;">$${(i.precio*i.qty).toFixed(2)}</td></tr>`).join('');
-    tContent.innerHTML = `<h2>🍬 MATA TU ANSIEDAD</h2><p style="font-size: 0.7rem; color: #666; margin-bottom: 10px;">Ticket / Tasa (Hoy): ${TASA_BCV.toFixed(2)}</p><p style="font-size: 0.8rem; text-align: left;"><strong>Cliente:</strong> ${nom} ${ape}<br><strong>Área:</strong> ${ubi}<br><strong>Modalidad:</strong> ${metodo.toUpperCase()}</p><table class="ticket-table"><thead><tr><th>Cant/Desc</th><th style="text-align:right;">Monto</th></tr></thead><tbody>${itemsStr}</tbody></table><h3 style="text-align: right; margin-top: 10px;">Total USD: $${tUsd.toFixed(2)}</h3><h4 style="text-align: right; color: #666;">Total Bs: ${tBs.toFixed(2)}</h4><p style="font-size: 0.7rem; margin-top: 20px;">Tome captura de este ticket como soporte de su compra.</p><button type="button" class="btn-primary" onclick="irAInicio(); cerrarModales();" style="width:100%; margin-top:15px;">Aceptar y Salir</button>`;
+    
+    tContent.innerHTML = `
+        <h2>🍬 MATA TU ANSIEDAD</h2>
+        <p style="font-size: 0.7rem; color: #666; margin-bottom: 10px;">Ticket / Tasa (Hoy): ${TASA_BCV.toFixed(2)}</p>
+        <p style="font-size: 0.8rem; text-align: left;"><strong>Cliente:</strong> ${nom} ${ape}<br><strong>Área:</strong> ${ubi}<br><strong>Modalidad:</strong> ${metodo.toUpperCase()}</p>
+        <table class="ticket-table"><thead><tr><th>Cant/Desc</th><th style="text-align:right;">Monto</th></tr></thead><tbody>${itemsStr}</tbody></table>
+        <h3 style="text-align: right; margin-top: 10px;">Total USD: $${tUsd.toFixed(2)}</h3><h4 style="text-align: right; color: #666;">Total Bs: ${tBs.toFixed(2)}</h4>
+        <p style="font-size: 0.7rem; margin-top: 20px;">Tome captura de este ticket como soporte de su compra.</p>
+        
+        <button type="button" class="btn-primary" style="background:#25D366; width:100%; margin-top:15px; font-weight:bold;" onclick="window.open('https://wa.me/${NUMERO_LIDER_WHATSAPP}?text=${txtWhatsapp}', '_blank')">📲 Enviar Pedido a WhatsApp</button>
+        <button type="button" class="btn-text" onclick="irAInicio(); cerrarModales();" style="width:100%; margin-top:10px;">Cerrar y Volver a la Tienda</button>
+    `;
     document.getElementById('modal-ticket').style.display = 'flex';
 }
 
@@ -591,7 +632,6 @@ window.guardarCambioAdmin = async (id) => {
         prod.precio = parseFloat(document.getElementById(`adm-precio-${id}`).value); prod.stock = parseInt(document.getElementById(`adm-stock-${id}`).value);
         await respaldarInventarioEnNube(); 
         localStorage.setItem('mta_productos', JSON.stringify(productos)); showToast("Inventario actualizado ✅"); renderAdminInventario(); 
-        renderCategorias(); // Actualiza por si cambió algo
     }
 };
 
@@ -620,7 +660,7 @@ window.agregarProductoAdmin = async () => {
     document.getElementById('admin-add-nombre').value = ''; document.getElementById('admin-add-precio').value = ''; document.getElementById('admin-add-stock').value = ''; document.getElementById('admin-add-img-url').value = ''; document.getElementById('admin-add-img-gallery').value = ''; document.getElementById('admin-add-img-camera').value = ''; document.getElementById('file-msg-text').innerHTML = 'Ninguna imagen seleccionada'; document.getElementById('admin-add-new-cat').value = ''; document.getElementById('grupo-nueva-cat').style.display = 'none';
     btnSave.innerText = "💾 Guardar Producto en Catálogo"; btnSave.style.pointerEvents = "auto"; 
     renderAdminInventario();
-    renderCategorias(); // 🔥 Dibuja el botón si se creó nueva categoría
+    renderCategorias(); 
 };
 
 window.abrirModalEditar = (id) => {
@@ -650,7 +690,7 @@ window.guardarEdicionAdmin = async () => {
 };
 
 // ==========================================
-// 8. Panel de Usuarios, Deudas y Reportes
+// 8. Panel de Usuarios y Deudas
 // ==========================================
 function renderAdminUsuarios() {
     const list = document.getElementById('admin-users-list'); list.innerHTML = '';
@@ -687,7 +727,6 @@ function renderAdminDeudas() {
     });
 }
 
-// 🔥 NUEVO: RENDERIZAR REPORTES Y EXPORTAR A CSV 🔥
 function renderAdminReportes() {
     const list = document.getElementById('admin-reportes-list'); list.innerHTML = '';
     
@@ -733,10 +772,8 @@ window.descargarPagosCSV = () => {
 
     if(filtrados.length === 0) return showToast("No hay pagos para exportar en estas fechas.");
     
-    // 1. Ordenar alfabéticamente por nombre
     filtrados.sort((a, b) => a.nombre.localeCompare(b.nombre));
 
-    // 2. Agrupar por usuario
     let agrupados = {};
     filtrados.forEach(p => {
         if(!agrupados[p.correo]) agrupados[p.correo] = { nombre: p.nombre, pagos: [], totalUsd: 0 };
@@ -744,7 +781,6 @@ window.descargarPagosCSV = () => {
         agrupados[p.correo].totalUsd += p.monto;
     });
 
-    // 3. Crear el formato para Excel (usamos Punto y Coma para separar las columnas correctamente en Latinoamérica)
     let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
     csvContent += "FECHA;CORREO;NOMBRE DEL CLIENTE;MONTO (USD);MONTO ESTIMADO (BS)\n";
     
@@ -753,27 +789,23 @@ window.descargarPagosCSV = () => {
     for (let correo in agrupados) {
         let usr = agrupados[correo];
         
-        // Pagos individuales del usuario
         usr.pagos.forEach(p => {
             let fechaF = new Date(p.fecha).toLocaleDateString('es-VE');
             let montoBs = (p.monto * TASA_BCV).toFixed(2);
             csvContent += `${fechaF};${p.correo};${p.nombre};${p.monto.toFixed(2)};${montoBs}\n`;
         });
         
-        // Fila de Total por Usuario
         let totalUsd = usr.totalUsd;
         let totalBs = (totalUsd * TASA_BCV).toFixed(2);
         granTotalUsd += totalUsd;
         
         csvContent += `;;TOTAL DE ${usr.nombre.toUpperCase()};${totalUsd.toFixed(2)};${totalBs}\n`;
-        csvContent += `;;;;\n`; // Espacio en blanco para separar del siguiente usuario
+        csvContent += `;;;;\n`; 
     }
     
-    // Fila del Gran Total Final
     let granTotalBs = (granTotalUsd * TASA_BCV).toFixed(2);
     csvContent += `;;GRAN TOTAL RECAUDADO;${granTotalUsd.toFixed(2)};${granTotalBs}\n`;
 
-    // 4. Descargar
     var encodedUri = encodeURI(csvContent);
     var link = document.createElement("a");
     link.setAttribute("href", encodedUri);
@@ -859,6 +891,7 @@ function renderAdminPedidos() {
     });
 }
 
+// 🔥 FUNCIÓN DE CANCELAR REVISADA 🔥
 window.cancelarPedidoAdmin = async (id) => {
     let order = ordenesGlobales.find(o => o.id === id);
     if(order && !order.cancelado) {
@@ -877,14 +910,14 @@ window.cancelarPedidoAdmin = async (id) => {
             if(order.metodo === 'credito' && !order.pagado) {
                 await enviarDatosGoogle({ action: 'cancelarCompra', correo: order.correo, totalUsd: order.totalUsd, detalles: JSON.stringify(order.items) });
             }
-            localStorage.setItem('mta_global_orders', JSON.stringify(ordenesGlobales)); showToast("✅ Pedido cancelado correctamente. Abriendo WhatsApp..."); renderAdminPedidos();
+            localStorage.setItem('mta_global_orders', JSON.stringify(ordenesGlobales)); showToast("✅ Pedido cancelado correctamente."); renderAdminPedidos();
             let cliente = usuariosDeLaNube.find(u => u.correo === order.correo); let telefonoCliente = cliente ? cliente.telefono : "";
             
             if(telefonoCliente) {
                 telefonoCliente = telefonoCliente.replace(/\D/g, ''); 
                 if (telefonoCliente.startsWith('0')) telefonoCliente = '58' + telefonoCliente.substring(1); else if (telefonoCliente.length === 10) telefonoCliente = '58' + telefonoCliente;
                 let txtCancelacion = `🚫 *MATA TU ANSIEDAD - PEDIDO CANCELADO*%0A%0AHola *${order.nombres}*, te informamos que tu pedido #${order.id} ha sido cancelado.%0A%0A*Motivo:* ${motivo}%0A%0AEl saldo a deber (si aplica) ha sido ajustado. Si tienes dudas, puedes responder a este mensaje. ¡Gracias!`;
-                setTimeout(() => { window.open(`https://wa.me/${telefonoCliente}?text=${txtCancelacion}`, '_blank'); }, 1500);
+                window.open(`https://wa.me/${telefonoCliente}?text=${txtCancelacion}`, '_blank');
             } else { showToast("⚠️ El usuario no tiene un teléfono registrado para notificar por WhatsApp."); }
         }
     }
