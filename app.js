@@ -9,6 +9,7 @@ const GOOGLE_SHEETS_API = "https://script.google.com/macros/s/AKfycby-Fdc74UV1Fn
 
 let carrito = [];
 let usuariosDeLaNube = []; 
+let productos = []; // 🔥 AHORA EMPIEZA VACÍO, SIN SALVAVIDAS 🔥
 
 function setCookie(name, value, days) {
     let expires = "";
@@ -58,19 +59,12 @@ let datosTemporales = {};
 let temporizadorOTP = null;
 let productoEnEdicionId = null;
 
-const catalogoBase = [
-    { id: 1, nombre: "Chocolate Savoy", precio: 1.00, stock: 20, img: "https://images.unsplash.com/photo-1549007994-cb92caebd54b?w=200", cat: "Dulce" },
-    { id: 2, nombre: "Cri Cri Pequeño", precio: 1.20, stock: 15, img: "https://images.unsplash.com/photo-1614088685112-0a760b71a3c8?w=200", cat: "Dulce" },
-    { id: 3, nombre: "Dorito Pequeño", precio: 1.50, stock: 10, img: "https://images.unsplash.com/photo-1566478989037-eec170784d0b?w=200", cat: "Salado" },
-    { id: 4, nombre: "Oreo (4 galletas)", precio: 1.00, stock: 30, img: "https://images.unsplash.com/photo-1558961363-fa8fdf82db35?w=200", cat: "Dulce" }
-];
-let productos = catalogoBase; 
 let ordenesGlobales = JSON.parse(localStorage.getItem('mta_global_orders')) || [];
 let diasCobroGlobales = JSON.parse(localStorage.getItem('mta_dias_cobro')) || [15, 30]; 
 let categoriasMTA = JSON.parse(localStorage.getItem('mta_categorias')) || ['Dulce', 'Salado'];
 
 // ==========================================
-// 2. Inicialización y Purificador de Duplicados
+// 2. Inicialización y Sincronización Estricta
 // ==========================================
 window.onload = async () => {
     try {
@@ -78,8 +72,8 @@ window.onload = async () => {
         const respuesta = await fetch(urlFresco);
         const dataNube = await respuesta.json();
         
+        // 🔥 LECTURA ESTRICTA DESDE GOOGLE DRIVE 🔥
         if(dataNube.inventario && dataNube.inventario.length > 0) {
-            // 🔥 FILTRO PURIFICADOR DE DUPLICADOS FRONTEND 🔥
             let unicos = [];
             let map = new Map();
             for (let item of dataNube.inventario) {
@@ -88,19 +82,20 @@ window.onload = async () => {
                     unicos.push(item);
                 }
             }
-            productos = unicos;
+            productos = unicos; // Asigna EXCLUSIVAMENTE lo que viene del Drive
         } else {
-            respaldarInventarioEnNube(); 
+             // Si el Drive está literalmente vacío, avisa, pero no inventa productos
+            showToast("El inventario en la nube está vacío.");
+            productos = []; 
         }
         
         if(dataNube.clientes) usuariosDeLaNube = dataNube.clientes;
         
     } catch(e) {
-        console.log("Trabajando en modo local por error de red.");
-        let localProds = JSON.parse(localStorage.getItem('mta_productos')) || catalogoBase;
-        let unicos = []; let map = new Map();
-        for (let item of localProds) { if(!map.has(item.id)){ map.set(item.id, true); unicos.push(item); } }
-        productos = unicos;
+        console.error("Error crítico al cargar desde Google Drive:", e);
+        showToast("⚠️ Problemas de conexión con la base de datos.");
+        // 🔥 Ya no carga productos falsos si hay error de red 🔥
+        productos = []; 
     }
 
     await obtenerTasaBCV(); 
@@ -420,7 +415,15 @@ window.verTicketAntiguo = (idFicha) => {
 function renderProductos(lista) {
     const grid = document.getElementById('product-grid');
     grid.innerHTML = '';
-    document.getElementById('search-error').style.display = lista.length === 0 ? 'block' : 'none';
+    
+    // Si la lista está vacía, mostramos un mensaje amigable
+    if(lista.length === 0) {
+        document.getElementById('search-error').style.display = 'block';
+        document.getElementById('search-error').innerHTML = "No hay productos en el inventario de la nube en este momento.";
+        return;
+    } else {
+        document.getElementById('search-error').style.display = 'none';
+    }
 
     lista.forEach(p => {
         const agotado = p.stock <= 0;
@@ -522,7 +525,6 @@ function renderResumenCheckout() {
 }
 
 window.finalizarCompra = async () => {
-    // 🔥 Bloqueamos el botón temporalmente para que nadie mande 2 compras por error
     const btnComprar = document.querySelector('#checkout-page .checkout-box .btn-primary');
     if(btnComprar) { btnComprar.innerText = "⏳ Procesando Pedido..."; btnComprar.style.pointerEvents = "none"; }
 
