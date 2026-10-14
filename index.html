@@ -24,25 +24,26 @@
                 <button id="tab-register" class="tab-btn" onclick="cambiarTabAuth('register')">Registrarse</button>
             </div>
 
-            <div id="auth-form-container">
+            <!-- 🔥 CAMBIO: Ahora es un <form> para activar el Guardado Automático de Google/Chrome 🔥 -->
+            <form id="auth-form-container" onsubmit="event.preventDefault(); procesarAuth();">
                 <div id="register-fields" style="display: none;">
-                    <input type="text" id="reg-nombres" class="input-form" placeholder="Nombres">
-                    <input type="text" id="reg-apellidos" class="input-form" placeholder="Apellidos">
+                    <input type="text" id="reg-nombres" class="input-form" placeholder="Nombres" autocomplete="given-name">
+                    <input type="text" id="reg-apellidos" class="input-form" placeholder="Apellidos" autocomplete="family-name">
                     <input type="text" id="reg-area" class="input-form" placeholder="Área de Trabajo (Ej. Farmacia, Piso 2)">
-                    <input type="tel" id="reg-telefono" class="input-form" placeholder="Teléfono de Contacto">
+                    <input type="tel" id="reg-telefono" class="input-form" placeholder="Teléfono de Contacto" autocomplete="tel">
                 </div>
                 
-                <input type="email" id="auth-email" class="input-form" placeholder="Correo electrónico" style="margin-bottom: 8px;">
+                <input type="email" id="auth-email" class="input-form" placeholder="Correo electrónico" autocomplete="username" style="margin-bottom: 8px;">
                 
-                <!-- 🔥 BOTONES RÁPIDOS DE DOMINIO 🔥 -->
-                <div id="email-shortcuts" style="display: flex; gap: 8px; justify-content: center; margin-bottom: 15px; flex-wrap: wrap;">
+                <!-- 🔥 BOTONES RÁPIDOS DE DOMINIO (Ahora inician ocultos) 🔥 -->
+                <div id="email-shortcuts" style="display: none; gap: 8px; justify-content: center; margin-bottom: 15px; flex-wrap: wrap;">
                     <button type="button" class="btn-text" style="font-size: 0.75rem; background: #f3f4f6; padding: 5px 12px; border-radius: 12px; color: #555; border: 1px solid #ddd;" onclick="completarDominio('@gmail.com')">@gmail.com</button>
                     <button type="button" class="btn-text" style="font-size: 0.75rem; background: #f3f4f6; padding: 5px 12px; border-radius: 12px; color: #555; border: 1px solid #ddd;" onclick="completarDominio('@hotmail.com')">@hotmail.com</button>
                     <button type="button" class="btn-text" style="font-size: 0.75rem; background: #f3f4f6; padding: 5px 12px; border-radius: 12px; color: #555; border: 1px solid #ddd;" onclick="completarDominio('@outlook.com')">@outlook.com</button>
                 </div>
                 
                 <div id="password-area" style="position: relative;">
-                    <input type="password" id="auth-password" class="input-form" placeholder="Contraseña" style="padding-right: 40px; margin-bottom: 5px;">
+                    <input type="password" id="auth-password" class="input-form" placeholder="Contraseña" autocomplete="current-password" style="padding-right: 40px; margin-bottom: 5px;">
                     <button type="button" id="toggle-pwd-btn" onclick="togglePassword()" style="position: absolute; right: 10px; top: 12px; background: none; border: none; cursor: pointer; font-size: 1.2rem;">👁️</button>
                     <div style="text-align: right; margin-bottom: 15px;">
                         <button type="button" class="btn-text" style="font-size: 0.85rem; font-weight: normal; color: var(--text-sub);" onclick="iniciarRecuperacion()">¿Olvidaste tu contraseña?</button>
@@ -52,18 +53,19 @@
                 <div id="remember-area" style="text-align: left; margin-bottom: 15px;">
                     <label style="font-size: 0.9rem; cursor: pointer; display: flex; align-items: center; gap: 8px; color: var(--text-sub);">
                         <input type="checkbox" id="remember-me" style="cursor: pointer; width: 16px; height: 16px;">
-                        Recordar mis datos
+                        Mantener mi sesión iniciada
                     </label>
                 </div>
                 
                 <div id="verification-area" style="display: none;">
                     <p style="font-size: 0.85rem; font-weight: bold; margin-bottom: 10px; color: var(--primary);">Ingresa el código de 6 dígitos:</p>
                     <input type="text" id="auth-code" inputmode="numeric" pattern="[0-9]*" class="input-form" placeholder="Ej: 123456" maxlength="6">
-                    <button class="btn-text" onclick="generarYMostrarCodigoOTP()" style="font-size: 0.85rem; margin-bottom: 15px; width: 100%; text-align: center;">¿No viste el código? Generar otro</button>
+                    <button type="button" class="btn-text" onclick="generarYMostrarCodigoOTP()" style="font-size: 0.85rem; margin-bottom: 15px; width: 100%; text-align: center;">¿No viste el código? Generar otro</button>
                 </div>
                 
-                <button id="btn-auth-action" class="btn-primary" style="width: 100%;" onclick="procesarAuth()">Entrar</button>
-            </div>
+                <!-- Ahora es un botón de tipo "submit" -->
+                <button type="submit" id="btn-auth-action" class="btn-primary" style="width: 100%;">Entrar</button>
+            </form>
         </div>
     </div>
 
@@ -151,7 +153,7 @@
                         <div class="input-group"><input type="text" id="admin-add-img-url" placeholder="O pega un enlace de internet aquí (Opcional)"></div>
                     </div>
                 </div>
-                <button id="btn-save-prod" class="btn-primary btn-large" onclick="agregarProductoAdmin()">💾 Guardar Producto en Catálogo</button>
+                <button type="button" id="btn-save-prod" class="btn-primary btn-large" onclick="agregarProductoAdmin()">💾 Guardar Producto en Catálogo</button>
             </div>
             <div class="checkout-box animate-entry" style="overflow-x: auto; padding: 0;">
                 <table class="admin-table">
@@ -178,7 +180,7 @@
                     <div class="input-group"><input type="number" id="cfg-dia-1" min="1" max="31" required><label>Día de Quincena 1</label></div>
                     <div class="input-group"><input type="number" id="cfg-dia-2" min="1" max="31" required><label>Día de Quincena 2</label></div>
                 </div>
-                <button class="btn-primary btn-large" onclick="guardarDiasCobro()">💾 Actualizar Fechas de Cobro</button>
+                <button type="button" class="btn-primary btn-large" onclick="guardarDiasCobro()">💾 Actualizar Fechas de Cobro</button>
             </div>
         </div>
     </div>
@@ -217,7 +219,7 @@
                 <p id="edit-file-msg-text" style="font-size: 0.8rem; text-align: center; color: var(--text-sub); margin-bottom: 15px;">Mantendremos la imagen actual si no seleccionas otra.</p>
                 <div class="input-group"><input type="text" id="edit-img-url" placeholder="O pega un enlace de internet aquí (Opcional)"></div>
             </div>
-            <button id="btn-update-prod" class="btn-primary btn-large" onclick="guardarEdicionAdmin()">🔄 Actualizar Producto</button>
+            <button type="button" id="btn-update-prod" class="btn-primary btn-large" onclick="guardarEdicionAdmin()">🔄 Actualizar Producto</button>
         </div>
     </div>
 

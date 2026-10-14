@@ -141,7 +141,7 @@ async function obtenerTasaBCV() {
 }
 
 // ==========================================
-// 3. Autenticación, Recuperación y UX
+// 3. Autenticación y Recuperación
 // ==========================================
 window.togglePassword = () => {
     const pwdInput = document.getElementById('auth-password');
@@ -162,20 +162,22 @@ window.cambiarTabAuth = (modo) => {
     document.getElementById('remember-area').style.display = modoRegistro ? 'none' : 'block';
     document.getElementById('verification-area').style.display = 'none';
     document.getElementById('auth-email').style.display = 'block';
-    document.getElementById('email-shortcuts').style.display = 'flex'; // Vuelve a mostrar los atajos
+    
+    // 🔥 CAMBIO: Los atajos de correo SOLO aparecen en "Registrarse" 🔥
+    document.getElementById('email-shortcuts').style.display = modoRegistro ? 'flex' : 'none';
+    
     document.getElementById('btn-auth-action').innerText = modoRegistro ? "Crear Cuenta" : "Entrar";
 };
 
-// 🔥 NUEVO: Función para autocompletar el correo
 window.completarDominio = (dominio) => {
     const emailInput = document.getElementById('auth-email');
     let val = emailInput.value.trim();
     if (val.includes('@')) {
-        val = val.split('@')[0]; // Si ya tiene un @, lo quita para reemplazarlo
+        val = val.split('@')[0];
     }
     if (val !== "") {
         emailInput.value = val + dominio;
-        document.getElementById('auth-password').focus(); // Salta a la contraseña automáticamente
+        document.getElementById('auth-password').focus(); 
     } else {
         showToast("⚠️ Escribe tu nombre de usuario primero");
     }
@@ -219,7 +221,7 @@ window.procesarAuth = async () => {
     const btn = document.getElementById('btn-auth-action');
     const u = document.getElementById('auth-email').value.trim().toLowerCase(); 
     const p = document.getElementById('auth-password').value.trim();
-    const remember = document.getElementById('remember-me').checked;
+    const remember = document.getElementById('remember-me') ? document.getElementById('remember-me').checked : false;
 
     if (modoRecuperacion) {
         const codeInput = document.getElementById('auth-code').value.trim();
@@ -408,7 +410,7 @@ function renderProductos(lista) {
         const agotado = p.stock <= 0;
         const precioBs = (p.precio * TASA_BCV).toFixed(2);
         let btnAñadirHtml = '';
-        if (usuarioActivo !== 'admin') btnAñadirHtml = `<button class="btn-primary" ${agotado ? 'disabled' : ''} onclick="agregarAlCarrito(${p.id})">Agregar 🛒</button>`;
+        if (usuarioActivo !== 'admin') btnAñadirHtml = `<button type="button" class="btn-primary" ${agotado ? 'disabled' : ''} onclick="agregarAlCarrito(${p.id})">Agregar 🛒</button>`;
         
         grid.innerHTML += `
             <div class="product-card ${agotado ? 'agotado' : ''}">
@@ -427,7 +429,7 @@ window.abrirDetalle = (id) => {
     const p = productos.find(x => x.id === id); if(!p) return;
     const precioMostrarUsd = `$${p.precio.toFixed(2)} USD`; const precioMostrarBs = `${(p.precio * TASA_BCV).toFixed(2)} Bs`;
     let btnAñadirHtml = '';
-    if (usuarioActivo !== 'admin') btnAñadirHtml = `<button class="btn-primary" ${p.stock <= 0 ? 'disabled' : ''} onclick="agregarAlCarrito(${p.id}); cerrarModales();" style="width: 100%;">${p.stock <= 0 ? 'Agotado' : 'Añadir al Carrito 🛒'}</button>`;
+    if (usuarioActivo !== 'admin') btnAñadirHtml = `<button type="button" class="btn-primary" ${p.stock <= 0 ? 'disabled' : ''} onclick="agregarAlCarrito(${p.id}); cerrarModales();" style="width: 100%;">${p.stock <= 0 ? 'Agotado' : 'Añadir al Carrito 🛒'}</button>`;
     
     document.getElementById('detalle-body').innerHTML = `
         <div class="img-zoom-container"><img src="${p.img}" class="img-zoom"></div>
@@ -529,7 +531,7 @@ window.finalizarCompra = async () => {
 
 function generarTicketHTML(nom, ape, ubi, metodo, tUsd, tBs, itemsTicket) {
     const tContent = document.getElementById('ticket-content'); let itemsStr = itemsTicket.map(i => `<tr><td>${i.qty}x ${i.nombre}</td><td style="text-align:right;">$${(i.precio*i.qty).toFixed(2)}</td></tr>`).join('');
-    tContent.innerHTML = `<h2>🍬 MATA TU ANSIEDAD</h2><p style="font-size: 0.7rem; color: #666; margin-bottom: 10px;">Ticket / Tasa (Hoy): ${TASA_BCV.toFixed(2)}</p><p style="font-size: 0.8rem; text-align: left;"><strong>Cliente:</strong> ${nom} ${ape}<br><strong>Área:</strong> ${ubi}<br><strong>Modalidad:</strong> ${metodo.toUpperCase()}</p><table class="ticket-table"><thead><tr><th>Cant/Desc</th><th style="text-align:right;">Monto</th></tr></thead><tbody>${itemsStr}</tbody></table><h3 style="text-align: right; margin-top: 10px;">Total USD: $${tUsd.toFixed(2)}</h3><h4 style="text-align: right; color: #666;">Total Bs: ${tBs.toFixed(2)}</h4><p style="font-size: 0.7rem; margin-top: 20px;">Tome captura de este ticket como soporte de su compra.</p><button class="btn-primary" onclick="irAInicio(); cerrarModales();" style="width:100%; margin-top:15px;">Aceptar y Salir</button>`;
+    tContent.innerHTML = `<h2>🍬 MATA TU ANSIEDAD</h2><p style="font-size: 0.7rem; color: #666; margin-bottom: 10px;">Ticket / Tasa (Hoy): ${TASA_BCV.toFixed(2)}</p><p style="font-size: 0.8rem; text-align: left;"><strong>Cliente:</strong> ${nom} ${ape}<br><strong>Área:</strong> ${ubi}<br><strong>Modalidad:</strong> ${metodo.toUpperCase()}</p><table class="ticket-table"><thead><tr><th>Cant/Desc</th><th style="text-align:right;">Monto</th></tr></thead><tbody>${itemsStr}</tbody></table><h3 style="text-align: right; margin-top: 10px;">Total USD: $${tUsd.toFixed(2)}</h3><h4 style="text-align: right; color: #666;">Total Bs: ${tBs.toFixed(2)}</h4><p style="font-size: 0.7rem; margin-top: 20px;">Tome captura de este ticket como soporte de su compra.</p><button type="button" class="btn-primary" onclick="irAInicio(); cerrarModales();" style="width:100%; margin-top:15px;">Aceptar y Salir</button>`;
     document.getElementById('modal-ticket').style.display = 'flex';
 }
 
@@ -554,7 +556,7 @@ function renderAdminInventario() {
     const list = document.getElementById('admin-inventory-list'); list.innerHTML = '';
     productos.forEach(p => {
         let pBs = (p.precio * TASA_BCV).toFixed(2);
-        list.innerHTML += `<tr><td><div style="display:flex; align-items:center; gap:10px;"><img src="${p.img}" style="width:45px; height:45px; border-radius:8px; object-fit:cover; box-shadow:0 2px 5px rgba(0,0,0,0.1);"><div><strong style="display:block;">${p.nombre}</strong><span style="font-size:0.75rem; background:var(--bg-color); color:var(--primary); padding:2px 6px; border-radius:4px;">${p.cat}</span></div></div></td><td><div style="display:flex; align-items:center; gap:5px;"><span style="color:#666;">$</span><input type="number" step="0.10" value="${p.precio}" id="adm-precio-${p.id}" class="admin-input-table" style="width:70px;"></div><span style="font-size:0.75rem; color:#888; display:block; margin-top:3px;">≈ ${pBs} Bs</span></td><td><input type="number" value="${p.stock}" id="adm-stock-${p.id}" class="admin-input-table"></td><td style="text-align:center;"><button class="btn-primary" style="padding: 4px 8px; font-size:0.75rem; margin-bottom:5px; width:90px;" onclick="guardarCambioAdmin(${p.id})">💾 Rápido</button><br><button class="btn-primary" style="background:#3B82F6; padding: 4px 8px; font-size:0.75rem; margin-bottom:5px; width:90px;" onclick="abrirModalEditar(${p.id})">✏️ Detalles</button><br><button class="btn-primary" style="background:#EF4444; padding: 4px 8px; font-size:0.75rem; width:90px;" onclick="eliminarProductoAdmin(${p.id})">🗑️ Eliminar</button></td></tr>`;
+        list.innerHTML += `<tr><td><div style="display:flex; align-items:center; gap:10px;"><img src="${p.img}" style="width:45px; height:45px; border-radius:8px; object-fit:cover; box-shadow:0 2px 5px rgba(0,0,0,0.1);"><div><strong style="display:block;">${p.nombre}</strong><span style="font-size:0.75rem; background:var(--bg-color); color:var(--primary); padding:2px 6px; border-radius:4px;">${p.cat}</span></div></div></td><td><div style="display:flex; align-items:center; gap:5px;"><span style="color:#666;">$</span><input type="number" step="0.10" value="${p.precio}" id="adm-precio-${p.id}" class="admin-input-table" style="width:70px;"></div><span style="font-size:0.75rem; color:#888; display:block; margin-top:3px;">≈ ${pBs} Bs</span></td><td><input type="number" value="${p.stock}" id="adm-stock-${p.id}" class="admin-input-table"></td><td style="text-align:center;"><button type="button" class="btn-primary" style="padding: 4px 8px; font-size:0.75rem; margin-bottom:5px; width:90px;" onclick="guardarCambioAdmin(${p.id})">💾 Rápido</button><br><button type="button" class="btn-primary" style="background:#3B82F6; padding: 4px 8px; font-size:0.75rem; margin-bottom:5px; width:90px;" onclick="abrirModalEditar(${p.id})">✏️ Detalles</button><br><button type="button" class="btn-primary" style="background:#EF4444; padding: 4px 8px; font-size:0.75rem; width:90px;" onclick="eliminarProductoAdmin(${p.id})">🗑️ Eliminar</button></td></tr>`;
     });
 }
 
@@ -627,7 +629,7 @@ function renderAdminPedidos() {
     if (ordenesGlobales.length === 0) { list.innerHTML = `<tr><td colspan="4" style="text-align:center;">No hay pedidos registrados</td></tr>`; return; }
     ordenesGlobales.forEach(o => {
         let bsActualizado = o.totalUsd * TASA_BCV; let txtEntrega = o.entregado ? 'Marcar NO Entregado' : 'Marcar Entregado'; let colorEntrega = o.entregado ? '#10B981' : '#6B7280'; let txtPago = o.pagado ? 'Marcar como Deuda' : 'Marcar Pagado'; let colorPago = o.pagado ? '#10B981' : '#EF4444'; 
-        list.innerHTML += `<tr><td><strong>#${o.id}</strong><br><span style="font-size:0.75rem; color:#666;">${o.fecha} ${o.hora}</span></td><td><strong>${o.nombres} ${o.apellidos}</strong><br><span style="font-size:0.8rem; color:var(--primary);">${o.area}</span></td><td><strong>$${o.totalUsd.toFixed(2)}</strong><br><span style="font-size:0.75rem;">${bsActualizado.toFixed(2)} Bs</span><br><span style="font-size:0.7rem; font-weight:bold;">${o.metodo.toUpperCase()}</span></td><td><button class="btn-primary" style="background:${colorEntrega}; padding:5px 10px; font-size:0.75rem; margin-bottom:5px; width: 140px;" onclick="toggleAdminStatus('${o.id}', 'entrega')">${txtEntrega}</button><br><button class="btn-primary" style="background:${colorPago}; padding:5px 10px; font-size:0.75rem; width: 140px;" onclick="toggleAdminStatus('${o.id}', 'pago')">${txtPago}</button></td></tr>`;
+        list.innerHTML += `<tr><td><strong>#${o.id}</strong><br><span style="font-size:0.75rem; color:#666;">${o.fecha} ${o.hora}</span></td><td><strong>${o.nombres} ${o.apellidos}</strong><br><span style="font-size:0.8rem; color:var(--primary);">${o.area}</span></td><td><strong>$${o.totalUsd.toFixed(2)}</strong><br><span style="font-size:0.75rem;">${bsActualizado.toFixed(2)} Bs</span><br><span style="font-size:0.7rem; font-weight:bold;">${o.metodo.toUpperCase()}</span></td><td><button type="button" class="btn-primary" style="background:${colorEntrega}; padding:5px 10px; font-size:0.75rem; margin-bottom:5px; width: 140px;" onclick="toggleAdminStatus('${o.id}', 'entrega')">${txtEntrega}</button><br><button type="button" class="btn-primary" style="background:${colorPago}; padding:5px 10px; font-size:0.75rem; width: 140px;" onclick="toggleAdminStatus('${o.id}', 'pago')">${txtPago}</button></td></tr>`;
     });
 }
 
