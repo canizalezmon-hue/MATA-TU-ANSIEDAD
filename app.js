@@ -97,7 +97,16 @@ window.onload = async () => {
     verificarAlarmaCobro(); 
     verificarExpiracionSesion();
 
-    if (usuarioActivo) ejecutarEntrada();
+    if (usuarioActivo) {
+        // 🔥 VALIDACIÓN: Si al cargar la página resulta que lo bloquearon 🔥
+        let usuarioVerificado = usuariosDeLaNube.find(u => u.correo === usuarioActivo);
+        if(usuarioVerificado && usuarioVerificado.estado === 'Bloqueado') {
+            showToast(`🚫 TU CUENTA FUE BLOQUEADA.<br>Motivo: ${usuarioVerificado.motivo}`);
+            cerrarSesion();
+        } else {
+            ejecutarEntrada();
+        }
+    }
     else {
         document.getElementById('welcome-screen').style.display = 'flex';
         if(correoGuardado) {
@@ -168,9 +177,7 @@ window.cambiarTabAuth = (modo) => {
     document.getElementById('remember-area').style.display = modoRegistro ? 'none' : 'block';
     document.getElementById('verification-area').style.display = 'none';
     document.getElementById('auth-email').style.display = 'block';
-    
     document.getElementById('email-shortcuts').style.display = modoRegistro ? 'flex' : 'none';
-    
     document.getElementById('btn-auth-action').innerText = modoRegistro ? "Crear Cuenta" : "Entrar";
 };
 
@@ -192,6 +199,11 @@ window.iniciarRecuperacion = () => {
 
     const existeEnNube = usuariosDeLaNube.find(usr => usr.correo === u);
     if (!existeEnNube) return showToast("❌ Ese correo no está registrado en el sistema.");
+
+    // 🔥 VALIDACIÓN: No dejar recuperar clave a bloqueados
+    if (existeEnNube.estado === 'Bloqueado') {
+        return showToast(`🚫 NO PUEDES RECUPERAR. TU CUENTA ESTÁ BLOQUEADA.<br>Motivo: ${existeEnNube.motivo}`);
+    }
 
     const nuevaPwd = prompt("Ingresa la NUEVA contraseña que deseas (mínimo 4 caracteres):");
     if (!nuevaPwd || nuevaPwd.trim().length < 4) return showToast("⚠️ Operación cancelada o contraseña muy corta.");
@@ -272,6 +284,12 @@ window.procesarAuth = async () => {
 
     const cuentaNube = usuariosDeLaNube.find(usr => usr.correo === u);
     if (!cuentaNube) return showToast("❌ Usuario no existe. Regístrate en la pestaña 'Registrarse'.");
+    
+    // 🔥 VALIDACIÓN DE BLOQUEO AL INICIAR SESIÓN 🔥
+    if (cuentaNube.estado === 'Bloqueado') {
+        return showToast(`🚫 TU CUENTA ESTÁ BLOQUEADA.<br><br>Motivo: ${cuentaNube.motivo}`);
+    }
+
     if (!cuentaNube.clave) return showToast("⚠️ Tu cuenta requiere una contraseña nueva. Usa la opción '¿Olvidaste tu contraseña?'");
     if (cuentaNube.clave !== p) return showToast("🔒 Contraseña incorrecta");
 
@@ -500,7 +518,12 @@ window.cambiarSeccionAdmin = (seccion) => {
     document.getElementById('admin-seccion-inventario').style.display = seccion === 'inventario' ? 'block' : 'none';
     document.getElementById('admin-seccion-pedidos').style.display = seccion === 'pedidos' ? 'block' : 'none';
     document.getElementById('admin-seccion-config').style.display = seccion === 'config' ? 'block' : 'none';
-    if(seccion === 'inventario') renderAdminInventario(); if(seccion === 'pedidos') renderAdminPedidos(); if(seccion === 'config') renderAdminConfig();
+    document.getElementById('admin-seccion-usuarios').style.display = seccion === 'usuarios' ? 'block' : 'none';
+    
+    if(seccion === 'inventario') renderAdminInventario(); 
+    if(seccion === 'pedidos') renderAdminPedidos(); 
+    if(seccion === 'config') renderAdminConfig();
+    if(seccion === 'usuarios') renderAdminUsuarios();
 };
 
 function renderAdminInventario() {
@@ -575,6 +598,65 @@ window.guardarEdicionAdmin = async () => {
 };
 
 // ==========================================
+// 8. Panel de Usuarios (NUEVO)
+// ==========================================
+function renderAdminUsuarios() {
+    const list = document.getElementById('admin-users-list'); list.innerHTML = '';
+    if (usuariosDeLaNube.length === 0) { list.innerHTML = `<tr><td colspan="4" style="text-align:center;">No hay usuarios registrados</td></tr>`; return; }
+    
+    usuariosDeLaNube.forEach(u => {
+        if(u.correo === 'administrador@matatuansiedad.com') return; 
+        
+        let estadoBadge = u.estado === 'Bloqueado' ? `<span class="badge-estado badge-rojo" style="display:block; text-align:center;">🚫 Bloqueado<br><small style="font-weight:normal;">${u.motivo}</small></span>` : `<span class="badge-estado badge-verde">✅ Activo</span>`;
+        
+        let btnBloquear = u.estado === 'Bloqueado' 
+            ? `<button type="button" class="btn-primary" style="background:#10B981; padding:5px 10px; font-size:0.75rem; width:120px; margin-bottom:5px;" onclick="desbloquearUsuarioAdmin('${u.correo}')">✅ Desbloquear</button>`
+            : `<button type="button" class="btn-primary" style="background:#F59E0B; padding:5px 10px; font-size:0.75rem; width:120px; margin-bottom:5px;" onclick="bloquearUsuarioAdmin('${u.correo}')">⚠️ Bloquear</button>`;
+        
+        list.innerHTML += `<tr>
+            <td><strong>${u.nombres} ${u.apellidos}</strong><br><span style="font-size:0.75rem; color:#666;">${u.correo}</span></td>
+            <td><strong>${u.telefono}</strong><br><span style="font-size:0.8rem; color:var(--primary);">${u.area}</span></td>
+            <td style="text-align:center;">${estadoBadge}</td>
+            <td style="text-align:center;">
+                ${btnBloquear}<br>
+                <button type="button" class="btn-primary" style="background:#EF4444; padding:5px 10px; font-size:0.75rem; width:120px;" onclick="eliminarUsuarioAdmin('${u.correo}')">🗑️ Eliminar</button>
+            </td>
+        </tr>`;
+    });
+}
+
+window.bloquearUsuarioAdmin = async (correo) => {
+    let motivo = prompt("Indica el motivo del bloqueo (Ej: Debe dinero, Facturas pendientes):");
+    if(motivo) {
+        showToast("⏳ Bloqueando usuario en la Nube...");
+        await enviarDatosGoogle({ action: 'bloquearCliente', correo: correo, motivo: motivo });
+        let usr = usuariosDeLaNube.find(u => u.correo === correo);
+        if(usr) { usr.estado = 'Bloqueado'; usr.motivo = motivo; }
+        showToast("🚫 Usuario bloqueado exitosamente.");
+        renderAdminUsuarios();
+    }
+};
+
+window.desbloquearUsuarioAdmin = async (correo) => {
+    showToast("⏳ Desbloqueando usuario en la Nube...");
+    await enviarDatosGoogle({ action: 'desbloquearCliente', correo: correo });
+    let usr = usuariosDeLaNube.find(u => u.correo === correo);
+    if(usr) { usr.estado = 'Activo'; usr.motivo = ""; }
+    showToast("✅ Usuario activado exitosamente.");
+    renderAdminUsuarios();
+};
+
+window.eliminarUsuarioAdmin = async (correo) => {
+    if(confirm("⚠️ ¿Estás COMPLETAMENTE SEGURO de eliminar a este usuario? Perderá acceso inmediato.")) {
+        showToast("⏳ Eliminando usuario en la Nube...");
+        await enviarDatosGoogle({ action: 'eliminarCliente', correo: correo });
+        usuariosDeLaNube = usuariosDeLaNube.filter(u => u.correo !== correo);
+        showToast("🗑️ Usuario borrado para siempre.");
+        renderAdminUsuarios();
+    }
+};
+
+// ==========================================
 // 9. Pedidos y Configuración Admin
 // ==========================================
 function renderAdminPedidos() {
@@ -603,20 +685,13 @@ function renderAdminPedidos() {
     });
 }
 
-// 🔥 FUNCIÓN ACTUALIZADA: Cancela y notifica al cliente por WhatsApp 🔥
 window.cancelarPedidoAdmin = async (id) => {
     let order = ordenesGlobales.find(o => o.id === id);
     if(order && !order.cancelado) {
         let motivo = prompt("Indique el motivo de la cancelación para que el cliente lo vea:");
         if(motivo) {
-            order.cancelado = true;
-            order.motivoCancelacion = motivo;
-
-            order.items.forEach(item => {
-                let prod = productos.find(p => p.id === item.id);
-                if(prod) prod.stock += item.qty;
-            });
-
+            order.cancelado = true; order.motivoCancelacion = motivo;
+            order.items.forEach(item => { let prod = productos.find(p => p.id === item.id); if(prod) prod.stock += item.qty; });
             let unicos = []; let map = new Map();
             for (let item of productos) { if(!map.has(item.id)){ map.set(item.id, true); unicos.push(item); } }
             productos = unicos;
@@ -628,34 +703,15 @@ window.cancelarPedidoAdmin = async (id) => {
             if(order.metodo === 'credito' && !order.pagado) {
                 await enviarDatosGoogle({ action: 'cancelarCompra', correo: order.correo, totalUsd: order.totalUsd, detalles: JSON.stringify(order.items) });
             }
-
-            localStorage.setItem('mta_global_orders', JSON.stringify(ordenesGlobales));
-            showToast("✅ Pedido cancelado correctamente. Abriendo WhatsApp...");
-            renderAdminPedidos();
-
-            // Lógica para enviar el mensaje por WhatsApp al cliente
-            let cliente = usuariosDeLaNube.find(u => u.correo === order.correo);
-            let telefonoCliente = cliente ? cliente.telefono : "";
+            localStorage.setItem('mta_global_orders', JSON.stringify(ordenesGlobales)); showToast("✅ Pedido cancelado correctamente. Abriendo WhatsApp..."); renderAdminPedidos();
+            let cliente = usuariosDeLaNube.find(u => u.correo === order.correo); let telefonoCliente = cliente ? cliente.telefono : "";
             
             if(telefonoCliente) {
-                // Limpiamos el número de espacios o guiones
                 telefonoCliente = telefonoCliente.replace(/\D/g, ''); 
-                
-                // Si empieza en 0 (ej: 0414), le quitamos el 0 y le ponemos 58
-                if (telefonoCliente.startsWith('0')) {
-                    telefonoCliente = '58' + telefonoCliente.substring(1);
-                } 
-                // Si solo pusieron 10 números (ej: 4141234567), le ponemos el 58
-                else if (telefonoCliente.length === 10) {
-                    telefonoCliente = '58' + telefonoCliente;
-                }
-
+                if (telefonoCliente.startsWith('0')) telefonoCliente = '58' + telefonoCliente.substring(1); else if (telefonoCliente.length === 10) telefonoCliente = '58' + telefonoCliente;
                 let txtCancelacion = `🚫 *MATA TU ANSIEDAD - PEDIDO CANCELADO*%0A%0AHola *${order.nombres}*, te informamos que tu pedido #${order.id} ha sido cancelado.%0A%0A*Motivo:* ${motivo}%0A%0AEl saldo a deber (si aplica) ha sido ajustado. Si tienes dudas, puedes responder a este mensaje. ¡Gracias!`;
-                
                 setTimeout(() => { window.open(`https://wa.me/${telefonoCliente}?text=${txtCancelacion}`, '_blank'); }, 1500);
-            } else {
-                showToast("⚠️ El usuario no tiene un teléfono registrado para notificar por WhatsApp.");
-            }
+            } else { showToast("⚠️ El usuario no tiene un teléfono registrado para notificar por WhatsApp."); }
         }
     }
 };
