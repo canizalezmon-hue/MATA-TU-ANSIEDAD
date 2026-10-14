@@ -8,6 +8,7 @@ const NUMERO_LIDER_WHATSAPP = "584122317676";
 const GOOGLE_SHEETS_API = "https://script.google.com/macros/s/AKfycby-Fdc74UV1FnoemPVOFCw-qeB0a5kI1X57QwQVdzW6wGiYoTWRQvtSZ0IwfeHXxS_H/exec";
 
 let carrito = [];
+let usuariosDeLaNube = []; // Aquí guardaremos los clientes extraídos de Google Sheets
 
 function setCookie(name, value, days) {
     let expires = "";
@@ -30,18 +31,17 @@ function getCookie(name) {
 }
 function eraseCookie(name) { document.cookie = name +'=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;'; }
 
-// Función puente para enviar datos a Google Sheets
+// Enviar datos invisibles (POST)
 function enviarDatosGoogle(datos) {
     const formData = new URLSearchParams();
-    for (const key in datos) {
-        formData.append(key, datos[key]);
-    }
-    fetch(GOOGLE_SHEETS_API, {
-        method: 'POST',
-        body: formData,
-        mode: 'no-cors' 
-    }).then(() => console.log("☁️ Sincronizado con Google Sheets"))
+    for (const key in datos) { formData.append(key, datos[key]); }
+    fetch(GOOGLE_SHEETS_API, { method: 'POST', body: formData, mode: 'no-cors' })
       .catch(e => console.error("Error sincronizando", e));
+}
+
+// Sincronizar stock y catálogos a la nube
+function respaldarInventarioEnNube() {
+    enviarDatosGoogle({ action: 'sincronizarInventario', datosInventario: JSON.stringify(productos) });
 }
 
 let usuarioActivo = getCookie('mta_session_user'); 
@@ -56,21 +56,42 @@ let datosTemporales = {};
 let temporizadorOTP = null;
 let productoEnEdicionId = null;
 
+// Catálogo por defecto por si falla el internet
 const catalogoBase = [
     { id: 1, nombre: "Chocolate Savoy", precio: 1.00, stock: 20, img: "https://images.unsplash.com/photo-1549007994-cb92caebd54b?w=200", cat: "Dulce" },
     { id: 2, nombre: "Cri Cri Pequeño", precio: 1.20, stock: 15, img: "https://images.unsplash.com/photo-1614088685112-0a760b71a3c8?w=200", cat: "Dulce" },
     { id: 3, nombre: "Dorito Pequeño", precio: 1.50, stock: 10, img: "https://images.unsplash.com/photo-1566478989037-eec170784d0b?w=200", cat: "Salado" },
     { id: 4, nombre: "Oreo (4 galletas)", precio: 1.00, stock: 30, img: "https://images.unsplash.com/photo-1558961363-fa8fdf82db35?w=200", cat: "Dulce" }
 ];
-let productos = JSON.parse(localStorage.getItem('mta_productos')) || catalogoBase;
+let productos = catalogoBase; // Se actualizará al abrir la app
 let ordenesGlobales = JSON.parse(localStorage.getItem('mta_global_orders')) || [];
 let diasCobroGlobales = JSON.parse(localStorage.getItem('mta_dias_cobro')) || [15, 30]; 
 let categoriasMTA = JSON.parse(localStorage.getItem('mta_categorias')) || ['Dulce', 'Salado'];
 
 // ==========================================
-// 2. Inicialización, API BCV y Expiración
+// 2. Inicialización de la App
 // ==========================================
 window.onload = async () => {
+    // 🌟 NUEVO: DESCARGAR LA BASE DE DATOS DEL DRIVE AL ABRIR
+    try {
+        const respuesta = await fetch(GOOGLE_SHEETS_API);
+        const dataNube = await respuesta.json();
+        
+        if(dataNube.inventario && dataNube.inventario.length > 0) {
+            productos = dataNube.inventario; // Inventario actualizado de Drive
+        } else {
+            // Si el drive está vacío, subimos el catálogo base
+            respaldarInventarioEnNube(); 
+        }
+        
+        if(dataNube.clientes) {
+            usuariosDeLaNube = dataNube.clientes; // Lista de usuarios global
+        }
+    } catch(e) {
+        console.log("Cargando modo local (Sin internet o primer inicio)", e);
+        productos = JSON.parse(localStorage.getItem('mta_productos')) || catalogoBase;
+    }
+
     await obtenerTasaBCV(); 
     verificarAlarmaCobro(); 
     verificarExpiracionSesion();
@@ -100,8 +121,7 @@ window.onload = async () => {
 function verificarExpiracionSesion() {
     const sessionTime = getCookie('mta_session_time');
     if (usuarioActivo && sessionTime) {
-        const now = Date.now();
-        if (now - parseInt(sessionTime) > 18000000) { 
+        if (Date.now() - parseInt(sessionTime) > 18000000) { 
             showToast("⏳ Tu sesión ha expirado por seguridad (5 horas).");
             cerrarSesion();
         }
@@ -123,13 +143,11 @@ async function obtenerTasaBCV() {
         const data = await response.json();
         TASA_BCV = data.promedio;
         document.getElementById('tasa-bcv-display').innerText = TASA_BCV.toFixed(2);
-    } catch (e) {
-        document.getElementById('tasa-bcv-display').innerText = TASA_BCV.toFixed(2) + " (Aprox)";
-    }
+    } catch (e) { document.getElementById('tasa-bcv-display').innerText = TASA_BCV.toFixed(2) + " (Aprox)"; }
 }
 
 // ==========================================
-// 3. Autenticación y Cookies
+// 3. Autenticación Global (Conectada a Drive)
 // ==========================================
 window.togglePassword = () => {
     const pwdInput = document.getElementById('auth-password');
@@ -139,8 +157,7 @@ window.togglePassword = () => {
 };
 
 window.cambiarTabAuth = (modo) => {
-    modoRegistro = (modo === 'register');
-    pasoVerificacion = false;
+    modoRegistro = (modo === 'register'); pasoVerificacion = false;
     document.getElementById('tab-login').classList.toggle('active', !modoRegistro);
     document.getElementById('tab-register').classList.toggle('active', modoRegistro);
     document.getElementById('register-fields').style.display = modoRegistro ? 'block' : 'none';
@@ -154,8 +171,7 @@ window.cambiarTabAuth = (modo) => {
 window.generarYMostrarCodigoOTP = () => {
     codigoGeneradoOTP = Math.floor(100000 + Math.random() * 900000).toString();
     const cont = document.getElementById('toast-container');
-    const t = document.createElement('div'); 
-    t.className = 'toast'; 
+    const t = document.createElement('div'); t.className = 'toast'; 
     t.innerHTML = `📱 TU CÓDIGO MTA ES: <strong style="font-size:1.3rem;">${codigoGeneradoOTP}</strong><br><small style="font-weight:normal;">Desaparecerá en 10 segundos</small>`;
     cont.appendChild(t); 
     if (temporizadorOTP) clearTimeout(temporizadorOTP);
@@ -176,7 +192,10 @@ window.procesarAuth = () => {
             const tel = document.getElementById('reg-telefono').value.trim();
 
             if(!nom || !ape || !area || !tel || !u || !p) return showToast("⚠️ Completa todos los campos");
-            if(localStorage.getItem(`acc_${u}`)) return showToast("❌ Correo ya registrado");
+            
+            // Revisar si ya existe en la Nube
+            const existeEnNube = usuariosDeLaNube.find(usr => usr.correo === u);
+            if(existeEnNube) return showToast("❌ Correo ya registrado en el sistema");
 
             datosTemporales = { correo: u, clave: p, nombres: nom, apellidos: ape, area: area, telefono: tel };
             pasoVerificacion = true;
@@ -191,18 +210,21 @@ window.procesarAuth = () => {
             const codeInput = document.getElementById('auth-code').value.trim();
             if (codeInput !== codigoGeneradoOTP) return showToast("🔒 Código incorrecto. Genera otro.");
 
-            localStorage.setItem(`acc_${datosTemporales.correo}`, JSON.stringify(datosTemporales));
-            
+            // GUARDAR EN DRIVE (Incluyendo la contraseña para poder loguearse en otros teléfonos)
             enviarDatosGoogle({
                 action: 'registrarCliente',
                 nombres: datosTemporales.nombres,
                 apellidos: datosTemporales.apellidos,
                 area: datosTemporales.area,
                 telefono: datosTemporales.telefono,
-                correo: datosTemporales.correo
+                correo: datosTemporales.correo,
+                clave: datosTemporales.clave
             });
 
-            showToast("🎉 Cuenta creada y sincronizada con éxito.");
+            // Agregarlo a la lista local para que inicie sesión inmediato
+            usuariosDeLaNube.push(datosTemporales);
+
+            showToast("🎉 Cuenta creada y sincronizada con la Nube.");
             cambiarTabAuth('login'); 
         }
         return;
@@ -210,28 +232,25 @@ window.procesarAuth = () => {
 
     if (!u || !p) return showToast("⚠️ Escribe correo y contraseña");
 
-    if (remember) {
-        setCookie('mta_remember_email', u, 30);
-        setCookie('mta_remember_pass', p, 30);
-    } else {
-        eraseCookie('mta_remember_email');
-        eraseCookie('mta_remember_pass');
-    }
+    if (remember) { setCookie('mta_remember_email', u, 30); setCookie('mta_remember_pass', p, 30); } 
+    else { eraseCookie('mta_remember_email'); eraseCookie('mta_remember_pass'); }
 
     if (u === 'administrador@matatuansiedad.com' && p === 'admin1234') {
-        usuarioActivo = 'admin';
-        datosUsuario = { nombres: 'Administrador', apellidos: 'Maestro', rol: 'admin' };
+        usuarioActivo = 'admin'; datosUsuario = { nombres: 'Administrador', apellidos: 'Maestro', rol: 'admin' };
         iniciarSesionSistema();
         return;
     }
 
-    const cuentaStr = localStorage.getItem(`acc_${u}`);
-    if (!cuentaStr) return showToast("❌ Usuario no encontrado");
+    // 🌟 NUEVO: INICIAR SESIÓN BUSCANDO EN LA BASE DE DATOS DE DRIVE
+    const cuentaNube = usuariosDeLaNube.find(usr => usr.correo === u);
     
-    const cuenta = JSON.parse(cuentaStr);
-    if (cuenta.clave !== p) return showToast("🔒 Contraseña incorrecta");
+    if (!cuentaNube) {
+        return showToast("❌ Usuario no existe. Regístrate para subir a la nube.");
+    }
+    
+    if (cuentaNube.clave !== p) return showToast("🔒 Contraseña incorrecta");
 
-    usuarioActivo = u; datosUsuario = cuenta;
+    usuarioActivo = u; datosUsuario = cuentaNube;
     iniciarSesionSistema();
 };
 
@@ -251,19 +270,12 @@ function ejecutarEntrada() {
     document.getElementById('btn-user-dropdown').innerText = `👤 Hola, ${datosUsuario.nombres} ▼`;
 
     const dropdown = document.getElementById('user-dropdown');
-
     if (usuarioActivo === 'admin') {
         document.getElementById('btn-cart-nav').style.display = 'none';
-        dropdown.innerHTML = `
-            <a href="#" onclick="abrirPanelAdmin()">⚙️ Panel Administrativo</a>
-            <a href="#" style="color: #EF4444;" onclick="cerrarSesion()">Cerrar Sesión</a>
-        `;
+        dropdown.innerHTML = `<a href="#" onclick="abrirPanelAdmin()">⚙️ Panel Administrativo</a><a href="#" style="color: #EF4444;" onclick="cerrarSesion()">Cerrar Sesión</a>`;
     } else {
         document.getElementById('btn-cart-nav').style.display = 'block';
-        dropdown.innerHTML = `
-            <a href="#" onclick="abrirPerfil()">Ver Mi Perfil / Facturas</a>
-            <a href="#" style="color: #EF4444;" onclick="cerrarSesion()">Cerrar Sesión</a>
-        `;
+        dropdown.innerHTML = `<a href="#" onclick="abrirPerfil()">Ver Mi Perfil / Facturas</a><a href="#" style="color: #EF4444;" onclick="cerrarSesion()">Cerrar Sesión</a>`;
     }
 
     document.getElementById('store-content').style.display = 'block';
@@ -271,12 +283,10 @@ function ejecutarEntrada() {
     renderProductos(productos);
 }
 
-window.cerrarSesion = () => { 
-    eraseCookie('mta_session_user'); eraseCookie('mta_session_data'); eraseCookie('mta_session_time'); location.reload(); 
-};
+window.cerrarSesion = () => { eraseCookie('mta_session_user'); eraseCookie('mta_session_data'); eraseCookie('mta_session_time'); location.reload(); };
 
 // ==========================================
-// 4. Perfil y Facturas Historial Usuario
+// 4. Perfil y Facturas
 // ==========================================
 window.toggleUserMenu = () => { document.getElementById('user-dropdown').classList.toggle('show-dropdown'); };
 document.addEventListener('click', function(event) {
@@ -300,23 +310,13 @@ window.abrirPerfil = () => {
     const factBox = document.getElementById('perfil-facturas');
     factBox.innerHTML = '';
 
-    if (misFacturas.length === 0) {
-        factBox.innerHTML = `<p style="text-align:center; color:#666;">Aún no tienes pedidos registrados.</p>`;
-    } else {
+    if (misFacturas.length === 0) factBox.innerHTML = `<p style="text-align:center; color:#666;">Aún no tienes pedidos registrados.</p>`;
+    else {
         misFacturas.forEach(f => {
             let bsActualizado = f.totalUsd * TASA_BCV;
             let badgeEntrega = f.entregado ? '<span class="badge-estado badge-verde">✅ Entregado</span>' : '<span class="badge-estado badge-gris">⏳ Prep. Entrega</span>';
             let badgePago = f.pagado ? '<span class="badge-estado badge-verde">✅ Pagado / Cancelado</span>' : '<span class="badge-estado badge-rojo">❌ Pago Pendiente</span>';
-
-            factBox.innerHTML += `
-                <div class="historial-item">
-                    <strong>Factura #${f.id}</strong> | ${f.fecha} <br>
-                    <strong>Modalidad:</strong> ${f.metodo.toUpperCase()}<br>
-                    <strong>Monto (Tasa Hoy):</strong> $${f.totalUsd.toFixed(2)} | ${bsActualizado.toFixed(2)} Bs.<br>
-                    ${badgeEntrega} ${badgePago}<br>
-                    <button class="btn-text" style="font-size:0.8rem; margin-top:5px;" onclick="verTicketAntiguo('${f.id}')">🔍 Ver Ticket Detallado</button>
-                </div>
-            `;
+            factBox.innerHTML += `<div class="historial-item"><strong>Factura #${f.id}</strong> | ${f.fecha} <br><strong>Modalidad:</strong> ${f.metodo.toUpperCase()}<br><strong>Monto (Tasa Hoy):</strong> $${f.totalUsd.toFixed(2)} | ${bsActualizado.toFixed(2)} Bs.<br>${badgeEntrega} ${badgePago}<br><button class="btn-text" style="font-size:0.8rem; margin-top:5px;" onclick="verTicketAntiguo('${f.id}')">🔍 Ver Ticket Detallado</button></div>`;
         });
     }
     document.getElementById('modal-perfil').style.display = 'flex';
@@ -324,10 +324,7 @@ window.abrirPerfil = () => {
 
 window.verTicketAntiguo = (idFicha) => {
     const f = ordenesGlobales.find(x => x.id === idFicha);
-    if(f) {
-        let bsActualizado = f.totalUsd * TASA_BCV;
-        generarTicketHTML(f.nombres, f.apellidos, f.area, f.metodo, f.totalUsd, bsActualizado, f.items);
-    }
+    if(f) { let bsActualizado = f.totalUsd * TASA_BCV; generarTicketHTML(f.nombres, f.apellidos, f.area, f.metodo, f.totalUsd, bsActualizado, f.items); }
 };
 
 // ==========================================
@@ -341,11 +338,8 @@ function renderProductos(lista) {
     lista.forEach(p => {
         const agotado = p.stock <= 0;
         const precioBs = (p.precio * TASA_BCV).toFixed(2);
-        
         let btnAñadirHtml = '';
-        if (usuarioActivo !== 'admin') {
-            btnAñadirHtml = `<button class="btn-primary" ${agotado ? 'disabled' : ''} onclick="agregarAlCarrito(${p.id})">Agregar 🛒</button>`;
-        }
+        if (usuarioActivo !== 'admin') btnAñadirHtml = `<button class="btn-primary" ${agotado ? 'disabled' : ''} onclick="agregarAlCarrito(${p.id})">Agregar 🛒</button>`;
         
         grid.innerHTML += `
             <div class="product-card ${agotado ? 'agotado' : ''}">
@@ -356,39 +350,26 @@ function renderProductos(lista) {
                 <p class="prod-price-bs">${precioBs} Bs</p>
                 <p class="prod-stock">${agotado ? 'Sin existencias' : `Quedan: ${p.stock}`}</p>
                 ${btnAñadirHtml}
-            </div>
-        `;
+            </div>`;
     });
 }
 
 window.abrirDetalle = (id) => {
-    const p = productos.find(x => x.id === id);
-    if(!p) return;
-    const precioMostrarUsd = `$${p.precio.toFixed(2)} USD`;
-    const precioMostrarBs = `${(p.precio * TASA_BCV).toFixed(2)} Bs`;
-    
+    const p = productos.find(x => x.id === id); if(!p) return;
+    const precioMostrarUsd = `$${p.precio.toFixed(2)} USD`; const precioMostrarBs = `${(p.precio * TASA_BCV).toFixed(2)} Bs`;
     let btnAñadirHtml = '';
-    if (usuarioActivo !== 'admin') {
-        btnAñadirHtml = `
-        <button class="btn-primary" ${p.stock <= 0 ? 'disabled' : ''} onclick="agregarAlCarrito(${p.id}); cerrarModales();" style="width: 100%;">
-            ${p.stock <= 0 ? 'Agotado' : 'Añadir al Carrito 🛒'}
-        </button>`;
-    }
+    if (usuarioActivo !== 'admin') btnAñadirHtml = `<button class="btn-primary" ${p.stock <= 0 ? 'disabled' : ''} onclick="agregarAlCarrito(${p.id}); cerrarModales();" style="width: 100%;">${p.stock <= 0 ? 'Agotado' : 'Añadir al Carrito 🛒'}</button>`;
     
     document.getElementById('detalle-body').innerHTML = `
         <div class="img-zoom-container"><img src="${p.img}" class="img-zoom"></div>
-        <h2>${p.nombre}</h2>
-        <h3 class="prod-price-usd" style="font-size: 2rem;">${precioMostrarUsd}</h3>
-        <p class="prod-price-bs">${precioMostrarBs}</p>
-        <p style="margin: 15px 0; color: #666;">Snack perfecto para matar tu ansiedad en cualquier momento del día.</p>
+        <h2>${p.nombre}</h2><h3 class="prod-price-usd" style="font-size: 2rem;">${precioMostrarUsd}</h3><p class="prod-price-bs">${precioMostrarBs}</p><p style="margin: 15px 0; color: #666;">Snack perfecto para matar tu ansiedad.</p>
         ${btnAñadirHtml}
     `;
     document.getElementById('modal-detalle').style.display = 'flex';
 };
 
 window.agregarAlCarrito = (id) => {
-    const p = productos.find(x => x.id === id);
-    const itemEnCarrito = carrito.find(x => x.id === id);
+    const p = productos.find(x => x.id === id); const itemEnCarrito = carrito.find(x => x.id === id);
     if (itemEnCarrito) {
         if (itemEnCarrito.qty < p.stock) { itemEnCarrito.qty++; showToast("Cantidad aumentada 🍬"); }
         else { showToast("No hay más stock disponible ❌"); return; }
@@ -397,30 +378,21 @@ window.agregarAlCarrito = (id) => {
 };
 
 function actualizarIconoCarrito() {
-    let count = 0; carrito.forEach(i => count += i.qty);
-    document.getElementById('cart-count').innerText = count;
+    let count = 0; carrito.forEach(i => count += i.qty); document.getElementById('cart-count').innerText = count;
 }
 
 window.abrirCarrito = () => { renderContenidoCarrito(); document.getElementById('modal-carrito').style.display = 'flex'; };
 
 function renderContenidoCarrito() {
-    const list = document.getElementById('cart-items');
-    let subtotal = 0; list.innerHTML = '';
+    const list = document.getElementById('cart-items'); let subtotal = 0; list.innerHTML = '';
     if (carrito.length === 0) { list.innerHTML = '<p style="text-align:center;">El carrito está vacío</p>'; }
     else {
         carrito.forEach((item, index) => {
             subtotal += item.precio * item.qty;
-            list.innerHTML += `
-                <div class="cart-item">
-                    <span style="flex:2; text-align:left; font-size:0.9rem;">${item.nombre}</span>
-                    <div class="qty-controls"><button class="qty-btn" onclick="cambiarCant(${index}, -1)">-</button><span>${item.qty}</span><button class="qty-btn" onclick="cambiarCant(${index}, 1)">+</button></div>
-                    <span style="flex:1; text-align:right; font-weight:bold;">$${(item.precio * item.qty).toFixed(2)}</span>
-                </div>
-            `;
+            list.innerHTML += `<div class="cart-item"><span style="flex:2; text-align:left; font-size:0.9rem;">${item.nombre}</span><div class="qty-controls"><button class="qty-btn" onclick="cambiarCant(${index}, -1)">-</button><span>${item.qty}</span><button class="qty-btn" onclick="cambiarCant(${index}, 1)">+</button></div><span style="flex:1; text-align:right; font-weight:bold;">$${(item.precio * item.qty).toFixed(2)}</span></div>`;
         });
     }
-    document.getElementById('cart-total-usd').innerText = `$${subtotal.toFixed(2)}`;
-    renderSugerencias();
+    document.getElementById('cart-total-usd').innerText = `$${subtotal.toFixed(2)}`; renderSugerencias();
 }
 
 window.cambiarCant = (index, delta) => {
@@ -431,18 +403,12 @@ window.cambiarCant = (index, delta) => {
 };
 
 function renderSugerencias() {
-    const sugBox = document.getElementById('cart-suggestions'); sugBox.innerHTML = '';
-    if(carrito.length === 0) return;
+    const sugBox = document.getElementById('cart-suggestions'); sugBox.innerHTML = ''; if(carrito.length === 0) return;
     const catsEnCarrito = carrito.map(c => c.cat);
     const catPred = catsEnCarrito.filter(c => c === 'Dulce').length >= catsEnCarrito.filter(c => c === 'Salado').length ? 'Salado' : 'Dulce'; 
     let sugeridos = productos.filter(p => !carrito.some(c => c.id === p.id) && p.stock > 0).sort((a, b) => (a.cat === catPred ? -1 : 1)); 
-
     sugeridos.slice(0, 3).forEach(p => {
-        sugBox.innerHTML += `
-            <div class="sug-card" onclick="agregarAlCarrito(${p.id}); renderContenidoCarrito();">
-                <img src="${p.img}"><p style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"><strong>${p.nombre}</strong></p><p style="color:var(--primary); font-size:0.9rem;">+ $${p.precio.toFixed(2)}</p>
-            </div>
-        `;
+        sugBox.innerHTML += `<div class="sug-card" onclick="agregarAlCarrito(${p.id}); renderContenidoCarrito();"><img src="${p.img}"><p style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"><strong>${p.nombre}</strong></p><p style="color:var(--primary); font-size:0.9rem;">+ $${p.precio.toFixed(2)}</p></div>`;
     });
 }
 
@@ -451,115 +417,51 @@ function renderSugerencias() {
 // ==========================================
 window.irACheckout = () => {
     if(carrito.length === 0) return showToast("Agrega algo para calmar tu ansiedad.");
-    cerrarModales();
-    document.getElementById('store-content').style.display = 'none';
-    document.getElementById('checkout-page').style.display = 'block';
-    
-    document.getElementById('chk-nombres').value = datosUsuario.nombres;
-    document.getElementById('chk-apellidos').value = datosUsuario.apellidos;
-    document.getElementById('chk-ubicacion').value = datosUsuario.area;
-
+    cerrarModales(); document.getElementById('store-content').style.display = 'none'; document.getElementById('checkout-page').style.display = 'block';
+    document.getElementById('chk-nombres').value = datosUsuario.nombres; document.getElementById('chk-apellidos').value = datosUsuario.apellidos; document.getElementById('chk-ubicacion').value = datosUsuario.area;
     renderResumenCheckout();
 };
 
-window.irAInicio = () => {
-    document.getElementById('checkout-page').style.display = 'none';
-    document.getElementById('admin-page').style.display = 'none';
-    document.getElementById('store-content').style.display = 'block';
-    renderProductos(productos);
-};
+window.irAInicio = () => { document.getElementById('checkout-page').style.display = 'none'; document.getElementById('admin-page').style.display = 'none'; document.getElementById('store-content').style.display = 'block'; renderProductos(productos); };
 
 function renderResumenCheckout() {
-    const list = document.getElementById('chk-resumen-lista');
-    const metodo = document.getElementById('chk-metodo').value; 
+    const list = document.getElementById('chk-resumen-lista'); const metodo = document.getElementById('chk-metodo').value; 
     let subtotalUsd = 0; list.innerHTML = '';
-    
-    carrito.forEach(i => {
-        subtotalUsd += (i.precio * i.qty);
-        list.innerHTML += `<p style="font-size:0.9rem; margin-bottom:5px;">• ${i.nombre} (x${i.qty})</p>`;
-    });
-
-    let factor = metodo === 'credito' ? 1.20 : 1.00;
-    let totalCobrarUsd = subtotalUsd * factor;
-    let totalCobrarBs = totalCobrarUsd * TASA_BCV;
+    carrito.forEach(i => { subtotalUsd += (i.precio * i.qty); list.innerHTML += `<p style="font-size:0.9rem; margin-bottom:5px;">• ${i.nombre} (x${i.qty})</p>`; });
+    let factor = metodo === 'credito' ? 1.20 : 1.00; let totalCobrarUsd = subtotalUsd * factor; let totalCobrarBs = totalCobrarUsd * TASA_BCV;
     let notaCredito = metodo === 'credito' ? `<br><span style="font-size:0.8rem; color: #EF4444;">*Incluye +20% por plazo quincenal*</span>` : '';
-
-    document.getElementById('chk-subtotal-usd').innerHTML = `$${totalCobrarUsd.toFixed(2)} ${notaCredito}`;
-    document.getElementById('chk-total-bs').innerText = `${totalCobrarBs.toFixed(2)} Bs`;
+    document.getElementById('chk-subtotal-usd').innerHTML = `$${totalCobrarUsd.toFixed(2)} ${notaCredito}`; document.getElementById('chk-total-bs').innerText = `${totalCobrarBs.toFixed(2)} Bs`;
     return { totalCobrarUsd, totalCobrarBs, metodo };
 }
 
 window.finalizarCompra = () => {
-    const n = document.getElementById('chk-nombres').value;
-    const a = document.getElementById('chk-apellidos').value;
-    const u = document.getElementById('chk-ubicacion').value;
-    const m = document.getElementById('chk-metodo').value;
+    const n = document.getElementById('chk-nombres').value; const a = document.getElementById('chk-apellidos').value; const u = document.getElementById('chk-ubicacion').value; const m = document.getElementById('chk-metodo').value;
     const { totalCobrarUsd, totalCobrarBs } = renderResumenCheckout();
 
-    carrito.forEach(item => {
-        let prod = productos.find(p => p.id === item.id);
-        if(prod) prod.stock -= item.qty;
-    });
-    localStorage.setItem('mta_productos', JSON.stringify(productos));
+    // 🌟 DESCONTAR STOCK Y SUBIRLO AL DRIVE
+    carrito.forEach(item => { let prod = productos.find(p => p.id === item.id); if(prod) prod.stock -= item.qty; });
+    respaldarInventarioEnNube(); 
+    localStorage.setItem('mta_productos', JSON.stringify(productos)); // Backup local
 
-    const esDeContado = (m === 'contado'); 
-    const nuevaFacturaGlobal = {
-        id: "MTA" + Date.now().toString().slice(-6),
-        fecha: new Date().toLocaleDateString('es-VE'),
-        hora: new Date().toLocaleTimeString('es-VE'),
-        correo: usuarioActivo,
-        nombres: n,
-        apellidos: a,
-        area: u,
-        items: [...carrito],
-        totalUsd: totalCobrarUsd,
-        metodo: m,
-        pagado: esDeContado, 
-        entregado: false
-    };
-    ordenesGlobales.unshift(nuevaFacturaGlobal);
-    localStorage.setItem('mta_global_orders', JSON.stringify(ordenesGlobales));
+    const nuevaFacturaGlobal = { id: "MTA" + Date.now().toString().slice(-6), fecha: new Date().toLocaleDateString('es-VE'), hora: new Date().toLocaleTimeString('es-VE'), correo: usuarioActivo, nombres: n, apellidos: a, area: u, items: [...carrito], totalUsd: totalCobrarUsd, metodo: m, pagado: (m === 'contado'), entregado: false };
+    ordenesGlobales.unshift(nuevaFacturaGlobal); localStorage.setItem('mta_global_orders', JSON.stringify(ordenesGlobales));
 
     if (m === 'credito') {
-        enviarDatosGoogle({
-            action: 'nuevaCompra',
-            correo: usuarioActivo,
-            nombres: n + " " + a, // Añadido para usuarios antiguos
-            totalUsd: totalCobrarUsd,
-            detalles: JSON.stringify(carrito) 
-        });
+        enviarDatosGoogle({ action: 'nuevaCompra', correo: usuarioActivo, nombres: n + " " + a, totalUsd: totalCobrarUsd, detalles: JSON.stringify(carrito) });
     }
 
     generarTicketHTML(n, a, u, m, totalCobrarUsd, totalCobrarBs, carrito);
     
-    let txt = `🍬 *MATA TU ANSIEDAD - NUEVO PEDIDO*%0A%0A`;
-    txt += `👤 *Cliente:* ${n} ${a}%0A`;
-    txt += `📍 *Ubicación:* ${u}%0A`;
-    txt += `💳 *Pago:* ${m === 'contado' ? 'De Contado' : 'Crédito Quincena'}%0A%0A`;
-    txt += `*🛒 DETALLE:*%0A`;
+    let txt = `🍬 *MATA TU ANSIEDAD - NUEVO PEDIDO*%0A%0A👤 *Cliente:* ${n} ${a}%0A📍 *Ubicación:* ${u}%0A💳 *Pago:* ${m === 'contado' ? 'De Contado' : 'Crédito Quincena'}%0A%0A*🛒 DETALLE:*%0A`;
     carrito.forEach(i => txt += `- ${i.nombre} (x${i.qty})%0A`);
-    txt += `%0A💰 *TOTAL:* $${totalCobrarUsd.toFixed(2)} / ${totalCobrarBs.toFixed(2)} Bs.%0A%0A`;
-    txt += `*MATA TU ANSIEDAD, TU PEDIDO HA SIDO RECIBIDO EXITOSAMENTE. POR FAVOR, TENGAN EN CUENTA QUE LAS HORAS DE ENTREGA VAN A SER DE 7 DE LA MAÑANA SOLAMENTE Y 7:30 DE LA NOCHE, NO MÁS.*%0A%0A`;
-    txt += `*POR FAVOR, MANTENER ESTO EN DISCRECIÓN, NO IR AL ÁREA DE FARMACIA A COMUNICARLO, TODO POR EL GRUPO DE WHATSAPP.*`;
+    txt += `%0A💰 *TOTAL:* $${totalCobrarUsd.toFixed(2)} / ${totalCobrarBs.toFixed(2)} Bs.%0A%0A*MATA TU ANSIEDAD, TU PEDIDO HA SIDO RECIBIDO EXITOSAMENTE. POR FAVOR, TENGAN EN CUENTA QUE LAS HORAS DE ENTREGA VAN A SER DE 7 DE LA MAÑANA SOLAMENTE Y 7:30 DE LA NOCHE, NO MÁS.*%0A%0A*POR FAVOR, MANTENER ESTO EN DISCRECIÓN, NO IR AL ÁREA DE FARMACIA A COMUNICARLO, TODO POR EL GRUPO DE WHATSAPP.*`;
 
-    carrito = []; actualizarIconoCarrito();
-    setTimeout(() => { window.open(`https://wa.me/${NUMERO_LIDER_WHATSAPP}?text=${txt}`, '_blank'); }, 3000);
+    carrito = []; actualizarIconoCarrito(); setTimeout(() => { window.open(`https://wa.me/${NUMERO_LIDER_WHATSAPP}?text=${txt}`, '_blank'); }, 3000);
 };
 
 function generarTicketHTML(nom, ape, ubi, metodo, tUsd, tBs, itemsTicket) {
-    const tContent = document.getElementById('ticket-content');
-    let itemsStr = itemsTicket.map(i => `<tr><td>${i.qty}x ${i.nombre}</td><td style="text-align:right;">$${(i.precio*i.qty).toFixed(2)}</td></tr>`).join('');
-    
-    tContent.innerHTML = `
-        <h2>🍬 MATA TU ANSIEDAD</h2>
-        <p style="font-size: 0.7rem; color: #666; margin-bottom: 10px;">Ticket / Tasa (Hoy): ${TASA_BCV.toFixed(2)}</p>
-        <p style="font-size: 0.8rem; text-align: left;"><strong>Cliente:</strong> ${nom} ${ape}<br><strong>Área:</strong> ${ubi}<br><strong>Modalidad:</strong> ${metodo.toUpperCase()}</p>
-        <table class="ticket-table"><thead><tr><th>Cant/Desc</th><th style="text-align:right;">Monto</th></tr></thead><tbody>${itemsStr}</tbody></table>
-        <h3 style="text-align: right; margin-top: 10px;">Total USD: $${tUsd.toFixed(2)}</h3>
-        <h4 style="text-align: right; color: #666;">Total Bs: ${tBs.toFixed(2)}</h4>
-        <p style="font-size: 0.7rem; margin-top: 20px;">Tome captura de este ticket como soporte de su compra.</p>
-        <button class="btn-primary" onclick="irAInicio(); cerrarModales();" style="width:100%; margin-top:15px;">Aceptar y Salir</button>
-    `;
+    const tContent = document.getElementById('ticket-content'); let itemsStr = itemsTicket.map(i => `<tr><td>${i.qty}x ${i.nombre}</td><td style="text-align:right;">$${(i.precio*i.qty).toFixed(2)}</td></tr>`).join('');
+    tContent.innerHTML = `<h2>🍬 MATA TU ANSIEDAD</h2><p style="font-size: 0.7rem; color: #666; margin-bottom: 10px;">Ticket / Tasa (Hoy): ${TASA_BCV.toFixed(2)}</p><p style="font-size: 0.8rem; text-align: left;"><strong>Cliente:</strong> ${nom} ${ape}<br><strong>Área:</strong> ${ubi}<br><strong>Modalidad:</strong> ${metodo.toUpperCase()}</p><table class="ticket-table"><thead><tr><th>Cant/Desc</th><th style="text-align:right;">Monto</th></tr></thead><tbody>${itemsStr}</tbody></table><h3 style="text-align: right; margin-top: 10px;">Total USD: $${tUsd.toFixed(2)}</h3><h4 style="text-align: right; color: #666;">Total Bs: ${tBs.toFixed(2)}</h4><p style="font-size: 0.7rem; margin-top: 20px;">Tome captura de este ticket como soporte de su compra.</p><button class="btn-primary" onclick="irAInicio(); cerrarModales();" style="width:100%; margin-top:15px;">Aceptar y Salir</button>`;
     document.getElementById('modal-ticket').style.display = 'flex';
 }
 
@@ -567,247 +469,85 @@ function generarTicketHTML(nom, ape, ubi, metodo, tUsd, tBs, itemsTicket) {
 // 7. Panel de Administrador Profesional
 // ==========================================
 window.abrirPanelAdmin = () => {
-    const dropdown = document.getElementById('user-dropdown');
-    if(dropdown) dropdown.classList.remove('show-dropdown');
-
-    document.getElementById('store-content').style.display = 'none';
-    document.getElementById('checkout-page').style.display = 'none';
-    document.getElementById('admin-page').style.display = 'block';
-    cambiarSeccionAdmin('inventario');
+    const dropdown = document.getElementById('user-dropdown'); if(dropdown) dropdown.classList.remove('show-dropdown');
+    document.getElementById('store-content').style.display = 'none'; document.getElementById('checkout-page').style.display = 'none'; document.getElementById('admin-page').style.display = 'block'; cambiarSeccionAdmin('inventario');
 };
 
 window.cambiarSeccionAdmin = (seccion) => {
     document.getElementById('admin-seccion-inventario').style.display = seccion === 'inventario' ? 'block' : 'none';
     document.getElementById('admin-seccion-pedidos').style.display = seccion === 'pedidos' ? 'block' : 'none';
     document.getElementById('admin-seccion-config').style.display = seccion === 'config' ? 'block' : 'none';
-
-    if(seccion === 'inventario') renderAdminInventario();
-    if(seccion === 'pedidos') renderAdminPedidos();
-    if(seccion === 'config') renderAdminConfig();
+    if(seccion === 'inventario') renderAdminInventario(); if(seccion === 'pedidos') renderAdminPedidos(); if(seccion === 'config') renderAdminConfig();
 };
 
 function renderAdminInventario() {
     const catSelect = document.getElementById('admin-add-cat');
-    catSelect.innerHTML = categoriasMTA.map(c => `<option value="${c}">${c}</option>`).join('');
-    catSelect.innerHTML += `<option value="otra">➕ Crear nueva categoría...</option>`;
-
-    const list = document.getElementById('admin-inventory-list');
-    list.innerHTML = '';
+    catSelect.innerHTML = categoriasMTA.map(c => `<option value="${c}">${c}</option>`).join(''); catSelect.innerHTML += `<option value="otra">➕ Crear nueva categoría...</option>`;
+    const list = document.getElementById('admin-inventory-list'); list.innerHTML = '';
     productos.forEach(p => {
         let pBs = (p.precio * TASA_BCV).toFixed(2);
-        list.innerHTML += `
-            <tr>
-                <td>
-                    <div style="display:flex; align-items:center; gap:10px;">
-                        <img src="${p.img}" style="width:45px; height:45px; border-radius:8px; object-fit:cover; box-shadow:0 2px 5px rgba(0,0,0,0.1);">
-                        <div><strong style="display:block;">${p.nombre}</strong><span style="font-size:0.75rem; background:var(--bg-color); color:var(--primary); padding:2px 6px; border-radius:4px;">${p.cat}</span></div>
-                    </div>
-                </td>
-                <td>
-                    <div style="display:flex; align-items:center; gap:5px;"><span style="color:#666;">$</span><input type="number" step="0.10" value="${p.precio}" id="adm-precio-${p.id}" class="admin-input-table" style="width:70px;"></div>
-                    <span style="font-size:0.75rem; color:#888; display:block; margin-top:3px;">≈ ${pBs} Bs</span>
-                </td>
-                <td><input type="number" value="${p.stock}" id="adm-stock-${p.id}" class="admin-input-table"></td>
-                <td style="text-align:center;">
-                    <button class="btn-primary" style="padding: 4px 8px; font-size:0.75rem; margin-bottom:5px; width:90px;" onclick="guardarCambioAdmin(${p.id})">💾 Rápido</button><br>
-                    <button class="btn-primary" style="background:#3B82F6; padding: 4px 8px; font-size:0.75rem; margin-bottom:5px; width:90px;" onclick="abrirModalEditar(${p.id})">✏️ Detalles</button><br>
-                    <button class="btn-primary" style="background:#EF4444; padding: 4px 8px; font-size:0.75rem; width:90px;" onclick="eliminarProductoAdmin(${p.id})">🗑️ Eliminar</button>
-                </td>
-            </tr>
-        `;
+        list.innerHTML += `<tr><td><div style="display:flex; align-items:center; gap:10px;"><img src="${p.img}" style="width:45px; height:45px; border-radius:8px; object-fit:cover; box-shadow:0 2px 5px rgba(0,0,0,0.1);"><div><strong style="display:block;">${p.nombre}</strong><span style="font-size:0.75rem; background:var(--bg-color); color:var(--primary); padding:2px 6px; border-radius:4px;">${p.cat}</span></div></div></td><td><div style="display:flex; align-items:center; gap:5px;"><span style="color:#666;">$</span><input type="number" step="0.10" value="${p.precio}" id="adm-precio-${p.id}" class="admin-input-table" style="width:70px;"></div><span style="font-size:0.75rem; color:#888; display:block; margin-top:3px;">≈ ${pBs} Bs</span></td><td><input type="number" value="${p.stock}" id="adm-stock-${p.id}" class="admin-input-table"></td><td style="text-align:center;"><button class="btn-primary" style="padding: 4px 8px; font-size:0.75rem; margin-bottom:5px; width:90px;" onclick="guardarCambioAdmin(${p.id})">💾 Rápido</button><br><button class="btn-primary" style="background:#3B82F6; padding: 4px 8px; font-size:0.75rem; margin-bottom:5px; width:90px;" onclick="abrirModalEditar(${p.id})">✏️ Detalles</button><br><button class="btn-primary" style="background:#EF4444; padding: 4px 8px; font-size:0.75rem; width:90px;" onclick="eliminarProductoAdmin(${p.id})">🗑️ Eliminar</button></td></tr>`;
     });
 }
 
-window.verificarNuevaCategoria = (idSelect, idGroup) => {
-    const val = document.getElementById(idSelect).value;
-    document.getElementById(idGroup).style.display = (val === 'otra') ? 'block' : 'none';
-};
+window.verificarNuevaCategoria = (idSelect, idGroup) => { const val = document.getElementById(idSelect).value; document.getElementById(idGroup).style.display = (val === 'otra') ? 'block' : 'none'; };
 
 window.guardarCambioAdmin = (id) => {
     const prod = productos.find(x => x.id === id);
     if(prod) {
-        prod.precio = parseFloat(document.getElementById(`adm-precio-${id}`).value);
-        prod.stock = parseInt(document.getElementById(`adm-stock-${id}`).value);
-        localStorage.setItem('mta_productos', JSON.stringify(productos));
-        showToast("Inventario actualizado ✅");
-        renderAdminInventario(); 
+        prod.precio = parseFloat(document.getElementById(`adm-precio-${id}`).value); prod.stock = parseInt(document.getElementById(`adm-stock-${id}`).value);
+        respaldarInventarioEnNube(); // 🌟 SUBIR CAMBIO DE STOCK A DRIVE
+        localStorage.setItem('mta_productos', JSON.stringify(productos)); showToast("Inventario actualizado ✅"); renderAdminInventario(); 
     }
 };
 
 window.eliminarProductoAdmin = (id) => {
-    if(confirm("⚠️ ¿Estás seguro de eliminar este producto del inventario? Esta acción no se puede deshacer.")) {
+    if(confirm("⚠️ ¿Estás seguro de eliminar este producto?")) {
         productos = productos.filter(p => p.id !== id);
-        localStorage.setItem('mta_productos', JSON.stringify(productos));
-        showToast("🗑️ Producto eliminado");
-        renderAdminInventario();
+        respaldarInventarioEnNube(); // 🌟 SUBIR CAMBIO AL DRIVE
+        localStorage.setItem('mta_productos', JSON.stringify(productos)); showToast("🗑️ Producto eliminado"); renderAdminInventario();
     }
 };
 
-window.actualizarTextoFoto = (input, origen, idMsg, idOtherInput) => {
-    const msg = document.getElementById(idMsg);
-    if(input.files && input.files[0]) {
-        msg.innerHTML = `✅ Foto lista (${origen}): ${input.files[0].name}`;
-        msg.style.color = "#10B981";
-        if (idOtherInput) document.getElementById(idOtherInput).value = '';
-    }
-};
+window.actualizarTextoFoto = (input, origen, idMsg, idOtherInput) => { const msg = document.getElementById(idMsg); if(input.files && input.files[0]) { msg.innerHTML = `✅ Foto lista (${origen}): ${input.files[0].name}`; msg.style.color = "#10B981"; if (idOtherInput) document.getElementById(idOtherInput).value = ''; } };
 
-window.procesarImagenLocal = (file) => {
-    return new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            const img = new Image();
-            img.onload = () => {
-                const canvas = document.createElement('canvas');
-                const MAX_WIDTH = 800; const MAX_HEIGHT = 800;
-                let width = img.width; let height = img.height;
-                if (width > height) { if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; } } 
-                else { if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; } }
-                canvas.width = width; canvas.height = height;
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(img, 0, 0, width, height);
-                resolve(canvas.toDataURL('image/jpeg', 0.7)); 
-            };
-            img.src = e.target.result;
-        };
-        reader.readAsDataURL(file);
-    });
-};
+window.procesarImagenLocal = (file) => { return new Promise((resolve) => { const reader = new FileReader(); reader.onload = (e) => { const img = new Image(); img.onload = () => { const canvas = document.createElement('canvas'); const MAX_WIDTH = 800; const MAX_HEIGHT = 800; let width = img.width; let height = img.height; if (width > height) { if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; } } else { if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; } } canvas.width = width; canvas.height = height; const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, width, height); resolve(canvas.toDataURL('image/jpeg', 0.7)); }; img.src = e.target.result; }; reader.readAsDataURL(file); }); };
 
 window.agregarProductoAdmin = async () => {
-    const btnSave = document.getElementById('btn-save-prod');
-    const n = document.getElementById('admin-add-nombre').value.trim();
-    let c = document.getElementById('admin-add-cat').value;
-    const p = parseFloat(document.getElementById('admin-add-precio').value);
-    const s = parseInt(document.getElementById('admin-add-stock').value);
-    const urlImg = document.getElementById('admin-add-img-url').value.trim();
+    const btnSave = document.getElementById('btn-save-prod'); const n = document.getElementById('admin-add-nombre').value.trim(); let c = document.getElementById('admin-add-cat').value; const p = parseFloat(document.getElementById('admin-add-precio').value); const s = parseInt(document.getElementById('admin-add-stock').value); const urlImg = document.getElementById('admin-add-img-url').value.trim(); const fileGallery = document.getElementById('admin-add-img-gallery'); const fileCamera = document.getElementById('admin-add-img-camera');
+    if (c === 'otra') { const nuevaCat = document.getElementById('admin-add-new-cat').value.trim(); if (!nuevaCat) return showToast("⚠️ Escribe la categoría"); c = nuevaCat.charAt(0).toUpperCase() + nuevaCat.slice(1).toLowerCase(); if (!categoriasMTA.includes(c)) { categoriasMTA.push(c); localStorage.setItem('mta_categorias', JSON.stringify(categoriasMTA)); } }
+    let fileToUpload = null; if (fileGallery.files && fileGallery.files[0]) fileToUpload = fileGallery.files[0]; else if (fileCamera.files && fileCamera.files[0]) fileToUpload = fileCamera.files[0];
+    let finalImg = urlImg; if (fileToUpload) { btnSave.innerText = "⏳ Procesando Foto..."; btnSave.style.pointerEvents = "none"; finalImg = await procesarImagenLocal(fileToUpload); }
+    if(!n || isNaN(p) || isNaN(s) || !finalImg) { btnSave.innerText = "💾 Guardar Producto en Catálogo"; btnSave.style.pointerEvents = "auto"; return showToast("⚠️ Llena todos los campos o sube una imagen"); }
+    const nuevoProd = { id: Date.now(), nombre: n, cat: c, precio: p, stock: s, img: finalImg }; productos.unshift(nuevoProd);
     
-    const fileGallery = document.getElementById('admin-add-img-gallery');
-    const fileCamera = document.getElementById('admin-add-img-camera');
-
-    if (c === 'otra') {
-        const nuevaCat = document.getElementById('admin-add-new-cat').value.trim();
-        if (!nuevaCat) return showToast("⚠️ Escribe el nombre de la nueva categoría");
-        c = nuevaCat.charAt(0).toUpperCase() + nuevaCat.slice(1).toLowerCase(); 
-        if (!categoriasMTA.includes(c)) {
-            categoriasMTA.push(c);
-            localStorage.setItem('mta_categorias', JSON.stringify(categoriasMTA));
-        }
-    }
-
-    let fileToUpload = null;
-    if (fileGallery.files && fileGallery.files[0]) fileToUpload = fileGallery.files[0];
-    else if (fileCamera.files && fileCamera.files[0]) fileToUpload = fileCamera.files[0];
-
-    let finalImg = urlImg; 
-    if (fileToUpload) {
-        btnSave.innerText = "⏳ Procesando Foto...";
-        btnSave.style.pointerEvents = "none";
-        finalImg = await procesarImagenLocal(fileToUpload);
-    }
-
-    if(!n || isNaN(p) || isNaN(s) || !finalImg) {
-        btnSave.innerText = "💾 Guardar Producto en Catálogo";
-        btnSave.style.pointerEvents = "auto";
-        return showToast("⚠️ Llena todos los campos o sube una imagen");
-    }
-
-    const nuevoProd = { id: Date.now(), nombre: n, cat: c, precio: p, stock: s, img: finalImg };
-    productos.unshift(nuevoProd);
-    
-    try {
-        localStorage.setItem('mta_productos', JSON.stringify(productos));
-        showToast("✨ Producto agregado exitosamente");
-    } catch(err) {
-        productos.shift();
-        showToast("❌ Memoria llena. Usa imágenes de URL en lugar de subir fotos pesadas.");
-    }
-    
-    document.getElementById('admin-add-nombre').value = ''; document.getElementById('admin-add-precio').value = '';
-    document.getElementById('admin-add-stock').value = ''; document.getElementById('admin-add-img-url').value = '';
-    document.getElementById('admin-add-img-gallery').value = ''; document.getElementById('admin-add-img-camera').value = '';
-    document.getElementById('file-msg-text').innerHTML = 'Ninguna imagen seleccionada';
-    document.getElementById('admin-add-new-cat').value = ''; document.getElementById('grupo-nueva-cat').style.display = 'none';
-    
-    btnSave.innerText = "💾 Guardar Producto en Catálogo"; btnSave.style.pointerEvents = "auto";
-    renderAdminInventario();
+    respaldarInventarioEnNube(); // 🌟 SUBIR NUEVO PRODUCTO AL DRIVE
+    localStorage.setItem('mta_productos', JSON.stringify(productos)); showToast("✨ Producto agregado exitosamente");
+    document.getElementById('admin-add-nombre').value = ''; document.getElementById('admin-add-precio').value = ''; document.getElementById('admin-add-stock').value = ''; document.getElementById('admin-add-img-url').value = ''; document.getElementById('admin-add-img-gallery').value = ''; document.getElementById('admin-add-img-camera').value = ''; document.getElementById('file-msg-text').innerHTML = 'Ninguna imagen seleccionada'; document.getElementById('admin-add-new-cat').value = ''; document.getElementById('grupo-nueva-cat').style.display = 'none';
+    btnSave.innerText = "💾 Guardar Producto en Catálogo"; btnSave.style.pointerEvents = "auto"; renderAdminInventario();
 };
 
 window.abrirModalEditar = (id) => {
-    const p = productos.find(x => x.id === id);
-    if(!p) return;
-    productoEnEdicionId = id;
-    
-    document.getElementById('edit-nombre').value = p.nombre;
-    document.getElementById('edit-precio').value = p.precio;
-    document.getElementById('edit-stock').value = p.stock;
-    
-    const catSelect = document.getElementById('edit-cat');
-    catSelect.innerHTML = categoriasMTA.map(c => `<option value="${c}">${c}</option>`).join('');
-    catSelect.innerHTML += `<option value="otra">➕ Crear nueva categoría...</option>`;
-    
-    if (categoriasMTA.includes(p.cat)) {
-        catSelect.value = p.cat;
-        document.getElementById('grupo-nueva-cat-edit').style.display = 'none';
-    } else {
-        catSelect.value = 'otra';
-        document.getElementById('grupo-nueva-cat-edit').style.display = 'block';
-        document.getElementById('edit-new-cat').value = p.cat;
-    }
-
-    document.getElementById('edit-img-preview').src = p.img;
-    document.getElementById('edit-img-gallery').value = ''; document.getElementById('edit-img-camera').value = ''; document.getElementById('edit-img-url').value = '';
-    document.getElementById('edit-file-msg-text').innerHTML = 'Mantendremos la imagen actual si no seleccionas otra.';
-    document.getElementById('edit-file-msg-text').style.color = "var(--text-sub)";
+    const p = productos.find(x => x.id === id); if(!p) return; productoEnEdicionId = id;
+    document.getElementById('edit-nombre').value = p.nombre; document.getElementById('edit-precio').value = p.precio; document.getElementById('edit-stock').value = p.stock;
+    const catSelect = document.getElementById('edit-cat'); catSelect.innerHTML = categoriasMTA.map(c => `<option value="${c}">${c}</option>`).join(''); catSelect.innerHTML += `<option value="otra">➕ Crear nueva categoría...</option>`;
+    if (categoriasMTA.includes(p.cat)) { catSelect.value = p.cat; document.getElementById('grupo-nueva-cat-edit').style.display = 'none'; } else { catSelect.value = 'otra'; document.getElementById('grupo-nueva-cat-edit').style.display = 'block'; document.getElementById('edit-new-cat').value = p.cat; }
+    document.getElementById('edit-img-preview').src = p.img; document.getElementById('edit-img-gallery').value = ''; document.getElementById('edit-img-camera').value = ''; document.getElementById('edit-img-url').value = ''; document.getElementById('edit-file-msg-text').innerHTML = 'Mantendremos la imagen actual si no seleccionas otra.'; document.getElementById('edit-file-msg-text').style.color = "var(--text-sub)";
     document.getElementById('modal-admin-editar').style.display = 'flex';
 };
 
 window.guardarEdicionAdmin = async () => {
-    const btnSave = document.getElementById('btn-update-prod');
-    const p = productos.find(x => x.id === productoEnEdicionId);
-    if(!p) return;
-
-    const n = document.getElementById('edit-nombre').value.trim();
-    let c = document.getElementById('edit-cat').value;
-    const precio = parseFloat(document.getElementById('edit-precio').value);
-    const stock = parseInt(document.getElementById('edit-stock').value);
-    const urlImg = document.getElementById('edit-img-url').value.trim();
-    
-    const fileGallery = document.getElementById('edit-img-gallery');
-    const fileCamera = document.getElementById('edit-img-camera');
-
-    if (c === 'otra') {
-        const nuevaCat = document.getElementById('edit-new-cat').value.trim();
-        if (!nuevaCat) return showToast("⚠️ Escribe el nombre de la nueva categoría");
-        c = nuevaCat.charAt(0).toUpperCase() + nuevaCat.slice(1).toLowerCase(); 
-        if (!categoriasMTA.includes(c)) {
-            categoriasMTA.push(c);
-            localStorage.setItem('mta_categorias', JSON.stringify(categoriasMTA));
-        }
-    }
-
-    let fileToUpload = null;
-    if (fileGallery && fileGallery.files && fileGallery.files[0]) fileToUpload = fileGallery.files[0];
-    else if (fileCamera && fileCamera.files && fileCamera.files[0]) fileToUpload = fileCamera.files[0];
-
+    const btnSave = document.getElementById('btn-update-prod'); const p = productos.find(x => x.id === productoEnEdicionId); if(!p) return;
+    const n = document.getElementById('edit-nombre').value.trim(); let c = document.getElementById('edit-cat').value; const precio = parseFloat(document.getElementById('edit-precio').value); const stock = parseInt(document.getElementById('edit-stock').value); const urlImg = document.getElementById('edit-img-url').value.trim(); const fileGallery = document.getElementById('edit-img-gallery'); const fileCamera = document.getElementById('edit-img-camera');
+    if (c === 'otra') { const nuevaCat = document.getElementById('edit-new-cat').value.trim(); if (!nuevaCat) return showToast("⚠️ Escribe la categoría"); c = nuevaCat.charAt(0).toUpperCase() + nuevaCat.slice(1).toLowerCase(); if (!categoriasMTA.includes(c)) { categoriasMTA.push(c); localStorage.setItem('mta_categorias', JSON.stringify(categoriasMTA)); } }
+    let fileToUpload = null; if (fileGallery && fileGallery.files && fileGallery.files[0]) fileToUpload = fileGallery.files[0]; else if (fileCamera && fileCamera.files && fileCamera.files[0]) fileToUpload = fileCamera.files[0];
     btnSave.innerText = "⏳ Procesando..."; btnSave.style.pointerEvents = "none";
-
-    let finalImg = urlImg; 
-    if (fileToUpload) { finalImg = await procesarImagenLocal(fileToUpload); } else if (!urlImg) { finalImg = p.img; }
-
-    if(!n || isNaN(precio) || isNaN(stock)) {
-        btnSave.innerText = "🔄 Actualizar Producto"; btnSave.style.pointerEvents = "auto";
-        return showToast("⚠️ Llena los campos básicos obligatorios");
-    }
-
+    let finalImg = urlImg; if (fileToUpload) { finalImg = await procesarImagenLocal(fileToUpload); } else if (!urlImg) { finalImg = p.img; }
+    if(!n || isNaN(precio) || isNaN(stock)) { btnSave.innerText = "🔄 Actualizar Producto"; btnSave.style.pointerEvents = "auto"; return showToast("⚠️ Llena los campos básicos obligatorios"); }
     p.nombre = n; p.cat = c; p.precio = precio; p.stock = stock; p.img = finalImg;
     
-    try {
-        localStorage.setItem('mta_productos', JSON.stringify(productos));
-        showToast("✨ Producto actualizado exitosamente");
-        document.getElementById('modal-admin-editar').style.display = 'none';
-        renderAdminInventario();
-    } catch(err) { showToast("❌ Memoria llena. Usa imágenes de URL."); }
+    respaldarInventarioEnNube(); // 🌟 SUBIR CAMBIO A DRIVE
+    localStorage.setItem('mta_productos', JSON.stringify(productos)); showToast("✨ Producto actualizado exitosamente"); document.getElementById('modal-admin-editar').style.display = 'none'; renderAdminInventario();
     btnSave.innerText = "🔄 Actualizar Producto"; btnSave.style.pointerEvents = "auto";
 };
 
@@ -815,32 +555,11 @@ window.guardarEdicionAdmin = async () => {
 // 9. Pedidos y Configuración Admin
 // ==========================================
 function renderAdminPedidos() {
-    const list = document.getElementById('admin-orders-list');
-    list.innerHTML = '';
-    
-    if (ordenesGlobales.length === 0) {
-        list.innerHTML = `<tr><td colspan="4" style="text-align:center;">No hay pedidos registrados</td></tr>`;
-        return;
-    }
-
+    const list = document.getElementById('admin-orders-list'); list.innerHTML = '';
+    if (ordenesGlobales.length === 0) { list.innerHTML = `<tr><td colspan="4" style="text-align:center;">No hay pedidos registrados</td></tr>`; return; }
     ordenesGlobales.forEach(o => {
-        let bsActualizado = o.totalUsd * TASA_BCV;
-        let txtEntrega = o.entregado ? 'Marcar NO Entregado' : 'Marcar Entregado';
-        let colorEntrega = o.entregado ? '#10B981' : '#6B7280'; 
-        let txtPago = o.pagado ? 'Marcar como Deuda' : 'Marcar Pagado';
-        let colorPago = o.pagado ? '#10B981' : '#EF4444'; 
-
-        list.innerHTML += `
-            <tr>
-                <td><strong>#${o.id}</strong><br><span style="font-size:0.75rem; color:#666;">${o.fecha} ${o.hora}</span></td>
-                <td><strong>${o.nombres} ${o.apellidos}</strong><br><span style="font-size:0.8rem; color:var(--primary);">${o.area}</span></td>
-                <td><strong>$${o.totalUsd.toFixed(2)}</strong><br><span style="font-size:0.75rem;">${bsActualizado.toFixed(2)} Bs</span><br><span style="font-size:0.7rem; font-weight:bold;">${o.metodo.toUpperCase()}</span></td>
-                <td>
-                    <button class="btn-primary" style="background:${colorEntrega}; padding:5px 10px; font-size:0.75rem; margin-bottom:5px; width: 140px;" onclick="toggleAdminStatus('${o.id}', 'entrega')">${txtEntrega}</button><br>
-                    <button class="btn-primary" style="background:${colorPago}; padding:5px 10px; font-size:0.75rem; width: 140px;" onclick="toggleAdminStatus('${o.id}', 'pago')">${txtPago}</button>
-                </td>
-            </tr>
-        `;
+        let bsActualizado = o.totalUsd * TASA_BCV; let txtEntrega = o.entregado ? 'Marcar NO Entregado' : 'Marcar Entregado'; let colorEntrega = o.entregado ? '#10B981' : '#6B7280'; let txtPago = o.pagado ? 'Marcar como Deuda' : 'Marcar Pagado'; let colorPago = o.pagado ? '#10B981' : '#EF4444'; 
+        list.innerHTML += `<tr><td><strong>#${o.id}</strong><br><span style="font-size:0.75rem; color:#666;">${o.fecha} ${o.hora}</span></td><td><strong>${o.nombres} ${o.apellidos}</strong><br><span style="font-size:0.8rem; color:var(--primary);">${o.area}</span></td><td><strong>$${o.totalUsd.toFixed(2)}</strong><br><span style="font-size:0.75rem;">${bsActualizado.toFixed(2)} Bs</span><br><span style="font-size:0.7rem; font-weight:bold;">${o.metodo.toUpperCase()}</span></td><td><button class="btn-primary" style="background:${colorEntrega}; padding:5px 10px; font-size:0.75rem; margin-bottom:5px; width: 140px;" onclick="toggleAdminStatus('${o.id}', 'entrega')">${txtEntrega}</button><br><button class="btn-primary" style="background:${colorPago}; padding:5px 10px; font-size:0.75rem; width: 140px;" onclick="toggleAdminStatus('${o.id}', 'pago')">${txtPago}</button></td></tr>`;
     });
 }
 
@@ -852,30 +571,17 @@ window.toggleAdminStatus = (id, tipo) => {
             order.pagado = !order.pagado;
             if(order.pagado) enviarDatosGoogle({ action: 'marcarPagado', correo: order.correo });
         }
-        localStorage.setItem('mta_global_orders', JSON.stringify(ordenesGlobales));
-        showToast("Estado actualizado correctamente 🔄");
-        renderAdminPedidos();
+        localStorage.setItem('mta_global_orders', JSON.stringify(ordenesGlobales)); showToast("Estado actualizado correctamente 🔄"); renderAdminPedidos();
     }
 };
 
-function renderAdminConfig() {
-    document.getElementById('cfg-dia-1').value = diasCobroGlobales[0] || 15;
-    document.getElementById('cfg-dia-2').value = diasCobroGlobales[1] || 30;
-}
+function renderAdminConfig() { document.getElementById('cfg-dia-1').value = diasCobroGlobales[0] || 15; document.getElementById('cfg-dia-2').value = diasCobroGlobales[1] || 30; }
 
 window.guardarDiasCobro = () => {
-    const d1 = parseInt(document.getElementById('cfg-dia-1').value);
-    const d2 = parseInt(document.getElementById('cfg-dia-2').value);
+    const d1 = parseInt(document.getElementById('cfg-dia-1').value); const d2 = parseInt(document.getElementById('cfg-dia-2').value);
     if(isNaN(d1) || isNaN(d2) || d1 < 1 || d1 > 31 || d2 < 1 || d2 > 31) return showToast("⚠️ Días inválidos (debe ser del 1 al 31)");
-    diasCobroGlobales = [d1, d2];
-    localStorage.setItem('mta_dias_cobro', JSON.stringify(diasCobroGlobales));
-    showToast(`✅ Días de cobro actualizados al ${d1} y ${d2} del mes.`);
-    verificarAlarmaCobro();
+    diasCobroGlobales = [d1, d2]; localStorage.setItem('mta_dias_cobro', JSON.stringify(diasCobroGlobales)); showToast(`✅ Días de cobro actualizados al ${d1} y ${d2} del mes.`); verificarAlarmaCobro();
 };
 
 window.cerrarModales = () => { document.querySelectorAll('.modal').forEach(m => m.style.display = 'none'); };
-window.showToast = (msg) => {
-    const cont = document.getElementById('toast-container');
-    const t = document.createElement('div'); t.className = 'toast'; t.innerHTML = msg;
-    cont.appendChild(t); setTimeout(() => t.remove(), 4000);
-};
+window.showToast = (msg) => { const cont = document.getElementById('toast-container'); const t = document.createElement('div'); t.className = 'toast'; t.innerHTML = msg; cont.appendChild(t); setTimeout(() => t.remove(), 4000); };
