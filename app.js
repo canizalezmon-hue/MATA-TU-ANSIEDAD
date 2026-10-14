@@ -168,7 +168,9 @@ window.cambiarTabAuth = (modo) => {
     document.getElementById('remember-area').style.display = modoRegistro ? 'none' : 'block';
     document.getElementById('verification-area').style.display = 'none';
     document.getElementById('auth-email').style.display = 'block';
+    
     document.getElementById('email-shortcuts').style.display = modoRegistro ? 'flex' : 'none';
+    
     document.getElementById('btn-auth-action').innerText = modoRegistro ? "Crear Cuenta" : "Entrar";
 };
 
@@ -323,7 +325,6 @@ window.abrirPerfil = () => {
         misFacturas.forEach(f => {
             let bsActualizado = f.totalUsd * TASA_BCV;
             
-            // 🔥 MODIFICACIÓN PARA MOSTRAR SI FUE CANCELADO AL CLIENTE 🔥
             let estadoHTML = "";
             if (f.cancelado) {
                 estadoHTML = `<span class="badge-estado badge-rojo" style="display:block; margin-top:5px; white-space:normal;">🚫 CANCELADO: ${f.motivoCancelacion}</span>`;
@@ -587,7 +588,6 @@ function renderAdminPedidos() {
         let txtPago = o.pagado ? 'Marcar como Deuda' : 'Marcar Pagado'; 
         let colorPago = o.pagado ? '#10B981' : '#EF4444'; 
         
-        // 🔥 MODIFICACIÓN: Si está cancelado, ocultamos los botones de entregar y pagar 🔥
         let botonesEstado = "";
         if (o.cancelado) {
             botonesEstado = `<span style="color:#EF4444; font-size:0.8rem; font-weight:bold; display:block; margin-top:5px;">🚫 Cancelado: ${o.motivoCancelacion}</span>`;
@@ -603,7 +603,7 @@ function renderAdminPedidos() {
     });
 }
 
-// 🔥 NUEVO: Función para que el Admin cancele el pedido 🔥
+// 🔥 FUNCIÓN ACTUALIZADA: Cancela y notifica al cliente por WhatsApp 🔥
 window.cancelarPedidoAdmin = async (id) => {
     let order = ordenesGlobales.find(o => o.id === id);
     if(order && !order.cancelado) {
@@ -612,13 +612,11 @@ window.cancelarPedidoAdmin = async (id) => {
             order.cancelado = true;
             order.motivoCancelacion = motivo;
 
-            // 1. Restaurar inventario en la página
             order.items.forEach(item => {
                 let prod = productos.find(p => p.id === item.id);
                 if(prod) prod.stock += item.qty;
             });
 
-            // 2. Guardar el stock restaurado en Drive
             let unicos = []; let map = new Map();
             for (let item of productos) { if(!map.has(item.id)){ map.set(item.id, true); unicos.push(item); } }
             productos = unicos;
@@ -627,19 +625,37 @@ window.cancelarPedidoAdmin = async (id) => {
             await respaldarInventarioEnNube();
             localStorage.setItem('mta_productos', JSON.stringify(productos));
 
-            // 3. Si era compra a crédito y no había sido pagada, borrar deuda en Drive
             if(order.metodo === 'credito' && !order.pagado) {
-                await enviarDatosGoogle({ 
-                    action: 'cancelarCompra', 
-                    correo: order.correo, 
-                    totalUsd: order.totalUsd, 
-                    detalles: JSON.stringify(order.items) 
-                });
+                await enviarDatosGoogle({ action: 'cancelarCompra', correo: order.correo, totalUsd: order.totalUsd, detalles: JSON.stringify(order.items) });
             }
 
             localStorage.setItem('mta_global_orders', JSON.stringify(ordenesGlobales));
-            showToast("✅ Pedido cancelado correctamente.");
+            showToast("✅ Pedido cancelado correctamente. Abriendo WhatsApp...");
             renderAdminPedidos();
+
+            // Lógica para enviar el mensaje por WhatsApp al cliente
+            let cliente = usuariosDeLaNube.find(u => u.correo === order.correo);
+            let telefonoCliente = cliente ? cliente.telefono : "";
+            
+            if(telefonoCliente) {
+                // Limpiamos el número de espacios o guiones
+                telefonoCliente = telefonoCliente.replace(/\D/g, ''); 
+                
+                // Si empieza en 0 (ej: 0414), le quitamos el 0 y le ponemos 58
+                if (telefonoCliente.startsWith('0')) {
+                    telefonoCliente = '58' + telefonoCliente.substring(1);
+                } 
+                // Si solo pusieron 10 números (ej: 4141234567), le ponemos el 58
+                else if (telefonoCliente.length === 10) {
+                    telefonoCliente = '58' + telefonoCliente;
+                }
+
+                let txtCancelacion = `🚫 *MATA TU ANSIEDAD - PEDIDO CANCELADO*%0A%0AHola *${order.nombres}*, te informamos que tu pedido #${order.id} ha sido cancelado.%0A%0A*Motivo:* ${motivo}%0A%0AEl saldo a deber (si aplica) ha sido ajustado. Si tienes dudas, puedes responder a este mensaje. ¡Gracias!`;
+                
+                setTimeout(() => { window.open(`https://wa.me/${telefonoCliente}?text=${txtCancelacion}`, '_blank'); }, 1500);
+            } else {
+                showToast("⚠️ El usuario no tiene un teléfono registrado para notificar por WhatsApp.");
+            }
         }
     }
 };
