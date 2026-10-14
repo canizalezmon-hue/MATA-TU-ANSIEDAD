@@ -31,15 +31,19 @@ function getCookie(name) {
 }
 function eraseCookie(name) { document.cookie = name +'=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;'; }
 
-function enviarDatosGoogle(datos) {
+// 🔥 AHORA ESTA FUNCIÓN ESPERA QUE GOOGLE RESPONDA ANTES DE SEGUIR
+async function enviarDatosGoogle(datos) {
     const formData = new URLSearchParams();
     for (const key in datos) { formData.append(key, datos[key]); }
-    fetch(GOOGLE_SHEETS_API, { method: 'POST', body: formData, mode: 'no-cors' })
-      .catch(e => console.error("Error sincronizando", e));
+    try {
+        await fetch(GOOGLE_SHEETS_API, { method: 'POST', body: formData, mode: 'no-cors' });
+    } catch(e) {
+        console.error("Error sincronizando", e);
+    }
 }
 
-function respaldarInventarioEnNube() {
-    enviarDatosGoogle({ action: 'sincronizarInventario', datosInventario: JSON.stringify(productos) });
+async function respaldarInventarioEnNube() {
+    await enviarDatosGoogle({ action: 'sincronizarInventario', datosInventario: JSON.stringify(productos) });
 }
 
 let usuarioActivo = getCookie('mta_session_user'); 
@@ -67,25 +71,21 @@ let diasCobroGlobales = JSON.parse(localStorage.getItem('mta_dias_cobro')) || [1
 let categoriasMTA = JSON.parse(localStorage.getItem('mta_categorias')) || ['Dulce', 'Salado'];
 
 // ==========================================
-// 2. Inicialización con ANTICACHÉ
+// 2. Inicialización Anti-Caché Fuerte
 // ==========================================
 window.onload = async () => {
     try {
-        // 🔥 ANTICACHÉ: Forzamos al navegador a traer datos en vivo de Google Drive
         const urlFresco = GOOGLE_SHEETS_API + "?t=" + new Date().getTime();
-        const respuesta = await fetch(urlFresco, { cache: "no-store" });
+        const respuesta = await fetch(urlFresco, { cache: "no-store", headers: { 'pragma': 'no-cache' }});
         const dataNube = await respuesta.json();
         
-        if(dataNube.inventario && dataNube.inventario.length > 0) {
-            productos = dataNube.inventario;
-        } else {
-            respaldarInventarioEnNube(); 
-        }
+        if(dataNube.inventario && dataNube.inventario.length > 0) productos = dataNube.inventario;
+        else respaldarInventarioEnNube(); 
         
-        if(dataNube.clientes) {
-            usuariosDeLaNube = dataNube.clientes;
-        }
+        if(dataNube.clientes) usuariosDeLaNube = dataNube.clientes;
+        
     } catch(e) {
+        console.log("Trabajando en modo local por error de red.");
         productos = JSON.parse(localStorage.getItem('mta_productos')) || catalogoBase;
     }
 
@@ -93,9 +93,8 @@ window.onload = async () => {
     verificarAlarmaCobro(); 
     verificarExpiracionSesion();
 
-    if (usuarioActivo) {
-        ejecutarEntrada();
-    } else {
+    if (usuarioActivo) ejecutarEntrada();
+    else {
         document.getElementById('welcome-screen').style.display = 'flex';
         if(correoGuardado) {
             document.getElementById('auth-email').value = correoGuardado; 
@@ -111,7 +110,6 @@ window.onload = async () => {
         const filtrados = productos.filter(p => p.nombre.toLowerCase().includes(query));
         renderProductos(filtrados);
     });
-
     document.getElementById('chk-metodo').addEventListener('change', renderResumenCheckout);
 };
 
@@ -176,11 +174,11 @@ window.iniciarRecuperacion = () => {
     if (!existeEnNube) return showToast("❌ Ese correo no está registrado en el sistema.");
 
     const nuevaPwd = prompt("Ingresa la NUEVA contraseña que deseas (mínimo 4 caracteres):");
-    if (!nuevaPwd || nuevaPwd.length < 4) return showToast("⚠️ Operación cancelada o contraseña muy corta.");
+    if (!nuevaPwd || nuevaPwd.trim().length < 4) return showToast("⚠️ Operación cancelada o contraseña muy corta.");
 
     modoRecuperacion = true;
     pasoVerificacion = true;
-    datosTemporales = { correo: u, clave: nuevaPwd };
+    datosTemporales = { correo: u, clave: nuevaPwd.trim() }; // Trim para seguridad
 
     document.getElementById('password-area').style.display = 'none';
     document.getElementById('remember-area').style.display = 'none';
@@ -201,7 +199,8 @@ window.generarYMostrarCodigoOTP = () => {
     temporizadorOTP = setTimeout(() => { t.remove(); }, 10000); 
 };
 
-window.procesarAuth = () => {
+// 🔥 PROCESO ASÍNCRONO DE LOGINS Y REGISTROS
+window.procesarAuth = async () => {
     const btn = document.getElementById('btn-auth-action');
     const u = document.getElementById('auth-email').value.trim().toLowerCase(); 
     const p = document.getElementById('auth-password').value.trim();
@@ -211,7 +210,10 @@ window.procesarAuth = () => {
         const codeInput = document.getElementById('auth-code').value.trim();
         if (codeInput !== codigoGeneradoOTP) return showToast("🔒 Código incorrecto. Genera otro.");
 
-        enviarDatosGoogle({
+        btn.innerText = "⏳ Guardando en la Nube...";
+        btn.style.pointerEvents = "none";
+
+        await enviarDatosGoogle({
             action: 'cambiarClave',
             correo: datosTemporales.correo,
             nuevaClave: datosTemporales.clave
@@ -220,7 +222,10 @@ window.procesarAuth = () => {
         const usr = usuariosDeLaNube.find(usr => usr.correo === datosTemporales.correo);
         if(usr) usr.clave = datosTemporales.clave;
 
-        showToast("✅ Contraseña actualizada exitosamente. Ya puedes iniciar sesión.");
+        btn.innerText = "Entrar";
+        btn.style.pointerEvents = "auto";
+
+        showToast("✅ Contraseña actualizada exitosamente. Inicia sesión.");
         cambiarTabAuth('login');
         return;
     }
@@ -250,7 +255,10 @@ window.procesarAuth = () => {
             const codeInput = document.getElementById('auth-code').value.trim();
             if (codeInput !== codigoGeneradoOTP) return showToast("🔒 Código incorrecto. Genera otro.");
 
-            enviarDatosGoogle({
+            btn.innerText = "⏳ Creando Cuenta en Nube...";
+            btn.style.pointerEvents = "none";
+
+            await enviarDatosGoogle({
                 action: 'registrarCliente',
                 nombres: datosTemporales.nombres,
                 apellidos: datosTemporales.apellidos,
@@ -261,6 +269,10 @@ window.procesarAuth = () => {
             });
 
             usuariosDeLaNube.push(datosTemporales);
+            
+            btn.innerText = "Entrar";
+            btn.style.pointerEvents = "auto";
+            
             showToast("🎉 Cuenta creada y sincronizada con la Nube.");
             cambiarTabAuth('login'); 
         }
@@ -474,19 +486,19 @@ function renderResumenCheckout() {
     return { totalCobrarUsd, totalCobrarBs, metodo };
 }
 
-window.finalizarCompra = () => {
+window.finalizarCompra = async () => {
     const n = document.getElementById('chk-nombres').value; const a = document.getElementById('chk-apellidos').value; const u = document.getElementById('chk-ubicacion').value; const m = document.getElementById('chk-metodo').value;
     const { totalCobrarUsd, totalCobrarBs } = renderResumenCheckout();
 
     carrito.forEach(item => { let prod = productos.find(p => p.id === item.id); if(prod) prod.stock -= item.qty; });
-    respaldarInventarioEnNube(); 
+    await respaldarInventarioEnNube(); 
     localStorage.setItem('mta_productos', JSON.stringify(productos)); 
 
     const nuevaFacturaGlobal = { id: "MTA" + Date.now().toString().slice(-6), fecha: new Date().toLocaleDateString('es-VE'), hora: new Date().toLocaleTimeString('es-VE'), correo: usuarioActivo, nombres: n, apellidos: a, area: u, items: [...carrito], totalUsd: totalCobrarUsd, metodo: m, pagado: (m === 'contado'), entregado: false };
     ordenesGlobales.unshift(nuevaFacturaGlobal); localStorage.setItem('mta_global_orders', JSON.stringify(ordenesGlobales));
 
     if (m === 'credito') {
-        enviarDatosGoogle({ action: 'nuevaCompra', correo: usuarioActivo, nombres: n + " " + a, totalUsd: totalCobrarUsd, detalles: JSON.stringify(carrito) });
+        await enviarDatosGoogle({ action: 'nuevaCompra', correo: usuarioActivo, nombres: n + " " + a, totalUsd: totalCobrarUsd, detalles: JSON.stringify(carrito) });
     }
 
     generarTicketHTML(n, a, u, m, totalCobrarUsd, totalCobrarBs, carrito);
@@ -531,19 +543,19 @@ function renderAdminInventario() {
 
 window.verificarNuevaCategoria = (idSelect, idGroup) => { const val = document.getElementById(idSelect).value; document.getElementById(idGroup).style.display = (val === 'otra') ? 'block' : 'none'; };
 
-window.guardarCambioAdmin = (id) => {
+window.guardarCambioAdmin = async (id) => {
     const prod = productos.find(x => x.id === id);
     if(prod) {
         prod.precio = parseFloat(document.getElementById(`adm-precio-${id}`).value); prod.stock = parseInt(document.getElementById(`adm-stock-${id}`).value);
-        respaldarInventarioEnNube(); 
+        await respaldarInventarioEnNube(); 
         localStorage.setItem('mta_productos', JSON.stringify(productos)); showToast("Inventario actualizado ✅"); renderAdminInventario(); 
     }
 };
 
-window.eliminarProductoAdmin = (id) => {
+window.eliminarProductoAdmin = async (id) => {
     if(confirm("⚠️ ¿Estás seguro de eliminar este producto?")) {
         productos = productos.filter(p => p.id !== id);
-        respaldarInventarioEnNube(); 
+        await respaldarInventarioEnNube(); 
         localStorage.setItem('mta_productos', JSON.stringify(productos)); showToast("🗑️ Producto eliminado"); renderAdminInventario();
     }
 };
@@ -560,7 +572,7 @@ window.agregarProductoAdmin = async () => {
     if(!n || isNaN(p) || isNaN(s) || !finalImg) { btnSave.innerText = "💾 Guardar Producto en Catálogo"; btnSave.style.pointerEvents = "auto"; return showToast("⚠️ Llena todos los campos o sube una imagen"); }
     const nuevoProd = { id: Date.now(), nombre: n, cat: c, precio: p, stock: s, img: finalImg }; productos.unshift(nuevoProd);
     
-    respaldarInventarioEnNube(); 
+    await respaldarInventarioEnNube(); 
     localStorage.setItem('mta_productos', JSON.stringify(productos)); showToast("✨ Producto agregado exitosamente");
     document.getElementById('admin-add-nombre').value = ''; document.getElementById('admin-add-precio').value = ''; document.getElementById('admin-add-stock').value = ''; document.getElementById('admin-add-img-url').value = ''; document.getElementById('admin-add-img-gallery').value = ''; document.getElementById('admin-add-img-camera').value = ''; document.getElementById('file-msg-text').innerHTML = 'Ninguna imagen seleccionada'; document.getElementById('admin-add-new-cat').value = ''; document.getElementById('grupo-nueva-cat').style.display = 'none';
     btnSave.innerText = "💾 Guardar Producto en Catálogo"; btnSave.style.pointerEvents = "auto"; renderAdminInventario();
@@ -585,7 +597,7 @@ window.guardarEdicionAdmin = async () => {
     if(!n || isNaN(precio) || isNaN(stock)) { btnSave.innerText = "🔄 Actualizar Producto"; btnSave.style.pointerEvents = "auto"; return showToast("⚠️ Llena los campos básicos obligatorios"); }
     p.nombre = n; p.cat = c; p.precio = precio; p.stock = stock; p.img = finalImg;
     
-    respaldarInventarioEnNube(); 
+    await respaldarInventarioEnNube(); 
     localStorage.setItem('mta_productos', JSON.stringify(productos)); showToast("✨ Producto actualizado exitosamente"); document.getElementById('modal-admin-editar').style.display = 'none'; renderAdminInventario();
     btnSave.innerText = "🔄 Actualizar Producto"; btnSave.style.pointerEvents = "auto";
 };
@@ -602,13 +614,13 @@ function renderAdminPedidos() {
     });
 }
 
-window.toggleAdminStatus = (id, tipo) => {
+window.toggleAdminStatus = async (id, tipo) => {
     let order = ordenesGlobales.find(o => o.id === id);
     if(order) {
         if(tipo === 'entrega') order.entregado = !order.entregado;
         if(tipo === 'pago') {
             order.pagado = !order.pagado;
-            if(order.pagado) enviarDatosGoogle({ action: 'marcarPagado', correo: order.correo });
+            if(order.pagado) await enviarDatosGoogle({ action: 'marcarPagado', correo: order.correo });
         }
         localStorage.setItem('mta_global_orders', JSON.stringify(ordenesGlobales)); showToast("Estado actualizado correctamente 🔄"); renderAdminPedidos();
     }
