@@ -35,8 +35,11 @@
                 <input type="email" id="auth-email" class="input-form" placeholder="Correo electrónico">
                 
                 <div id="password-area" style="position: relative;">
-                    <input type="password" id="auth-password" class="input-form" placeholder="Contraseña" style="padding-right: 40px;">
+                    <input type="password" id="auth-password" class="input-form" placeholder="Contraseña" style="padding-right: 40px; margin-bottom: 5px;">
                     <button type="button" id="toggle-pwd-btn" onclick="togglePassword()" style="position: absolute; right: 10px; top: 12px; background: none; border: none; cursor: pointer; font-size: 1.2rem;">👁️</button>
+                    <div style="text-align: right; margin-bottom: 15px;">
+                        <button type="button" class="btn-text" style="font-size: 0.85rem; font-weight: normal; color: var(--text-sub);" onclick="iniciarRecuperacion()">¿Olvidaste tu contraseña?</button>
+                    </div>
                 </div>
 
                 <div id="remember-area" style="text-align: left; margin-bottom: 15px;">
@@ -47,7 +50,7 @@
                 </div>
                 
                 <div id="verification-area" style="display: none;">
-                    <p style="font-size: 0.85rem; font-weight: bold; margin-bottom: 10px; color: var(--primary);">Ingresa el código que apareció arriba:</p>
+                    <p style="font-size: 0.85rem; font-weight: bold; margin-bottom: 10px; color: var(--primary);">Ingresa el código de 6 dígitos:</p>
                     <input type="text" id="auth-code" class="input-form" placeholder="Ej: 123456" maxlength="6">
                     <button class="btn-text" onclick="generarYMostrarCodigoOTP()" style="font-size: 0.85rem; margin-bottom: 15px; width: 100%; text-align: center;">¿No viste el código? Generar otro</button>
                 </div>
@@ -173,7 +176,6 @@
         </div>
     </div>
 
-    <!-- Modales -->
     <div id="modal-admin-editar" class="modal">
         <div class="modal-content" style="max-width: 600px;">
             <span class="close" onclick="cerrarModales()">×</span>

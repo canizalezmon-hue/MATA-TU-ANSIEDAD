@@ -8,7 +8,7 @@ const NUMERO_LIDER_WHATSAPP = "584122317676";
 const GOOGLE_SHEETS_API = "https://script.google.com/macros/s/AKfycby-Fdc74UV1FnoemPVOFCw-qeB0a5kI1X57QwQVdzW6wGiYoTWRQvtSZ0IwfeHXxS_H/exec";
 
 let carrito = [];
-let usuariosDeLaNube = []; // Aquí guardaremos los clientes extraídos de Google Sheets
+let usuariosDeLaNube = []; 
 
 function setCookie(name, value, days) {
     let expires = "";
@@ -31,7 +31,6 @@ function getCookie(name) {
 }
 function eraseCookie(name) { document.cookie = name +'=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;'; }
 
-// Enviar datos invisibles (POST)
 function enviarDatosGoogle(datos) {
     const formData = new URLSearchParams();
     for (const key in datos) { formData.append(key, datos[key]); }
@@ -39,7 +38,6 @@ function enviarDatosGoogle(datos) {
       .catch(e => console.error("Error sincronizando", e));
 }
 
-// Sincronizar stock y catálogos a la nube
 function respaldarInventarioEnNube() {
     enviarDatosGoogle({ action: 'sincronizarInventario', datosInventario: JSON.stringify(productos) });
 }
@@ -50,45 +48,42 @@ let correoGuardado = getCookie('mta_remember_email') || "";
 let passGuardado = getCookie('mta_remember_pass') || ""; 
 
 let modoRegistro = false;
+let modoRecuperacion = false; 
 let pasoVerificacion = false;
 let codigoGeneradoOTP = "";
 let datosTemporales = {};
 let temporizadorOTP = null;
 let productoEnEdicionId = null;
 
-// Catálogo por defecto por si falla el internet
 const catalogoBase = [
     { id: 1, nombre: "Chocolate Savoy", precio: 1.00, stock: 20, img: "https://images.unsplash.com/photo-1549007994-cb92caebd54b?w=200", cat: "Dulce" },
     { id: 2, nombre: "Cri Cri Pequeño", precio: 1.20, stock: 15, img: "https://images.unsplash.com/photo-1614088685112-0a760b71a3c8?w=200", cat: "Dulce" },
     { id: 3, nombre: "Dorito Pequeño", precio: 1.50, stock: 10, img: "https://images.unsplash.com/photo-1566478989037-eec170784d0b?w=200", cat: "Salado" },
     { id: 4, nombre: "Oreo (4 galletas)", precio: 1.00, stock: 30, img: "https://images.unsplash.com/photo-1558961363-fa8fdf82db35?w=200", cat: "Dulce" }
 ];
-let productos = catalogoBase; // Se actualizará al abrir la app
+let productos = catalogoBase; 
 let ordenesGlobales = JSON.parse(localStorage.getItem('mta_global_orders')) || [];
 let diasCobroGlobales = JSON.parse(localStorage.getItem('mta_dias_cobro')) || [15, 30]; 
 let categoriasMTA = JSON.parse(localStorage.getItem('mta_categorias')) || ['Dulce', 'Salado'];
 
 // ==========================================
-// 2. Inicialización de la App
+// 2. Inicialización
 // ==========================================
 window.onload = async () => {
-    // 🌟 NUEVO: DESCARGAR LA BASE DE DATOS DEL DRIVE AL ABRIR
     try {
         const respuesta = await fetch(GOOGLE_SHEETS_API);
         const dataNube = await respuesta.json();
         
         if(dataNube.inventario && dataNube.inventario.length > 0) {
-            productos = dataNube.inventario; // Inventario actualizado de Drive
+            productos = dataNube.inventario;
         } else {
-            // Si el drive está vacío, subimos el catálogo base
             respaldarInventarioEnNube(); 
         }
         
         if(dataNube.clientes) {
-            usuariosDeLaNube = dataNube.clientes; // Lista de usuarios global
+            usuariosDeLaNube = dataNube.clientes;
         }
     } catch(e) {
-        console.log("Cargando modo local (Sin internet o primer inicio)", e);
         productos = JSON.parse(localStorage.getItem('mta_productos')) || catalogoBase;
     }
 
@@ -147,7 +142,7 @@ async function obtenerTasaBCV() {
 }
 
 // ==========================================
-// 3. Autenticación Global (Conectada a Drive)
+// 3. Autenticación y Recuperación
 // ==========================================
 window.togglePassword = () => {
     const pwdInput = document.getElementById('auth-password');
@@ -157,7 +152,10 @@ window.togglePassword = () => {
 };
 
 window.cambiarTabAuth = (modo) => {
-    modoRegistro = (modo === 'register'); pasoVerificacion = false;
+    modoRegistro = (modo === 'register'); 
+    pasoVerificacion = false;
+    modoRecuperacion = false; 
+    
     document.getElementById('tab-login').classList.toggle('active', !modoRegistro);
     document.getElementById('tab-register').classList.toggle('active', modoRegistro);
     document.getElementById('register-fields').style.display = modoRegistro ? 'block' : 'none';
@@ -168,11 +166,34 @@ window.cambiarTabAuth = (modo) => {
     document.getElementById('btn-auth-action').innerText = modoRegistro ? "Crear Cuenta" : "Entrar";
 };
 
+window.iniciarRecuperacion = () => {
+    const u = document.getElementById('auth-email').value.trim();
+    if (!u) return showToast("⚠️ Escribe tu correo arriba primero para cambiar la clave.");
+
+    const existeEnNube = usuariosDeLaNube.find(usr => usr.correo === u);
+    if (!existeEnNube) return showToast("❌ Ese correo no está registrado en el sistema.");
+
+    const nuevaPwd = prompt("Ingresa la NUEVA contraseña que deseas (mínimo 4 caracteres):");
+    if (!nuevaPwd || nuevaPwd.length < 4) return showToast("⚠️ Operación cancelada o contraseña muy corta.");
+
+    modoRecuperacion = true;
+    pasoVerificacion = true;
+    datosTemporales = { correo: u, clave: nuevaPwd };
+
+    document.getElementById('password-area').style.display = 'none';
+    document.getElementById('remember-area').style.display = 'none';
+    document.getElementById('auth-email').style.display = 'none';
+    document.getElementById('verification-area').style.display = 'block';
+    document.getElementById('btn-auth-action').innerText = "Verificar Código de Cambio";
+
+    generarYMostrarCodigoOTP();
+};
+
 window.generarYMostrarCodigoOTP = () => {
     codigoGeneradoOTP = Math.floor(100000 + Math.random() * 900000).toString();
     const cont = document.getElementById('toast-container');
     const t = document.createElement('div'); t.className = 'toast'; 
-    t.innerHTML = `📱 TU CÓDIGO MTA ES: <strong style="font-size:1.3rem;">${codigoGeneradoOTP}</strong><br><small style="font-weight:normal;">Desaparecerá en 10 segundos</small>`;
+    t.innerHTML = `📱 CÓDIGO MTA DE VERIFICACIÓN: <strong style="font-size:1.3rem;">${codigoGeneradoOTP}</strong><br><small style="font-weight:normal;">Desaparecerá en 10 segundos</small>`;
     cont.appendChild(t); 
     if (temporizadorOTP) clearTimeout(temporizadorOTP);
     temporizadorOTP = setTimeout(() => { t.remove(); }, 10000); 
@@ -184,6 +205,24 @@ window.procesarAuth = () => {
     const p = document.getElementById('auth-password').value.trim();
     const remember = document.getElementById('remember-me').checked;
 
+    if (modoRecuperacion) {
+        const codeInput = document.getElementById('auth-code').value.trim();
+        if (codeInput !== codigoGeneradoOTP) return showToast("🔒 Código incorrecto. Genera otro.");
+
+        enviarDatosGoogle({
+            action: 'cambiarClave',
+            correo: datosTemporales.correo,
+            nuevaClave: datosTemporales.clave
+        });
+
+        const usr = usuariosDeLaNube.find(usr => usr.correo === datosTemporales.correo);
+        if(usr) usr.clave = datosTemporales.clave;
+
+        showToast("✅ Contraseña actualizada exitosamente. Ya puedes iniciar sesión.");
+        cambiarTabAuth('login');
+        return;
+    }
+
     if (modoRegistro) {
         if (!pasoVerificacion) {
             const nom = document.getElementById('reg-nombres').value.trim();
@@ -193,7 +232,6 @@ window.procesarAuth = () => {
 
             if(!nom || !ape || !area || !tel || !u || !p) return showToast("⚠️ Completa todos los campos");
             
-            // Revisar si ya existe en la Nube
             const existeEnNube = usuariosDeLaNube.find(usr => usr.correo === u);
             if(existeEnNube) return showToast("❌ Correo ya registrado en el sistema");
 
@@ -210,7 +248,6 @@ window.procesarAuth = () => {
             const codeInput = document.getElementById('auth-code').value.trim();
             if (codeInput !== codigoGeneradoOTP) return showToast("🔒 Código incorrecto. Genera otro.");
 
-            // GUARDAR EN DRIVE (Incluyendo la contraseña para poder loguearse en otros teléfonos)
             enviarDatosGoogle({
                 action: 'registrarCliente',
                 nombres: datosTemporales.nombres,
@@ -221,9 +258,7 @@ window.procesarAuth = () => {
                 clave: datosTemporales.clave
             });
 
-            // Agregarlo a la lista local para que inicie sesión inmediato
             usuariosDeLaNube.push(datosTemporales);
-
             showToast("🎉 Cuenta creada y sincronizada con la Nube.");
             cambiarTabAuth('login'); 
         }
@@ -241,13 +276,16 @@ window.procesarAuth = () => {
         return;
     }
 
-    // 🌟 NUEVO: INICIAR SESIÓN BUSCANDO EN LA BASE DE DATOS DE DRIVE
     const cuentaNube = usuariosDeLaNube.find(usr => usr.correo === u);
     
     if (!cuentaNube) {
-        return showToast("❌ Usuario no existe. Regístrate para subir a la nube.");
+        return showToast("❌ Usuario no existe. Regístrate en la pestaña 'Registrarse'.");
     }
     
+    if (!cuentaNube.clave) {
+        return showToast("⚠️ Tu cuenta requiere una contraseña nueva. Usa la opción '¿Olvidaste tu contraseña?'");
+    }
+
     if (cuentaNube.clave !== p) return showToast("🔒 Contraseña incorrecta");
 
     usuarioActivo = u; datosUsuario = cuentaNube;
@@ -438,10 +476,9 @@ window.finalizarCompra = () => {
     const n = document.getElementById('chk-nombres').value; const a = document.getElementById('chk-apellidos').value; const u = document.getElementById('chk-ubicacion').value; const m = document.getElementById('chk-metodo').value;
     const { totalCobrarUsd, totalCobrarBs } = renderResumenCheckout();
 
-    // 🌟 DESCONTAR STOCK Y SUBIRLO AL DRIVE
     carrito.forEach(item => { let prod = productos.find(p => p.id === item.id); if(prod) prod.stock -= item.qty; });
     respaldarInventarioEnNube(); 
-    localStorage.setItem('mta_productos', JSON.stringify(productos)); // Backup local
+    localStorage.setItem('mta_productos', JSON.stringify(productos)); 
 
     const nuevaFacturaGlobal = { id: "MTA" + Date.now().toString().slice(-6), fecha: new Date().toLocaleDateString('es-VE'), hora: new Date().toLocaleTimeString('es-VE'), correo: usuarioActivo, nombres: n, apellidos: a, area: u, items: [...carrito], totalUsd: totalCobrarUsd, metodo: m, pagado: (m === 'contado'), entregado: false };
     ordenesGlobales.unshift(nuevaFacturaGlobal); localStorage.setItem('mta_global_orders', JSON.stringify(ordenesGlobales));
@@ -496,7 +533,7 @@ window.guardarCambioAdmin = (id) => {
     const prod = productos.find(x => x.id === id);
     if(prod) {
         prod.precio = parseFloat(document.getElementById(`adm-precio-${id}`).value); prod.stock = parseInt(document.getElementById(`adm-stock-${id}`).value);
-        respaldarInventarioEnNube(); // 🌟 SUBIR CAMBIO DE STOCK A DRIVE
+        respaldarInventarioEnNube(); 
         localStorage.setItem('mta_productos', JSON.stringify(productos)); showToast("Inventario actualizado ✅"); renderAdminInventario(); 
     }
 };
@@ -504,7 +541,7 @@ window.guardarCambioAdmin = (id) => {
 window.eliminarProductoAdmin = (id) => {
     if(confirm("⚠️ ¿Estás seguro de eliminar este producto?")) {
         productos = productos.filter(p => p.id !== id);
-        respaldarInventarioEnNube(); // 🌟 SUBIR CAMBIO AL DRIVE
+        respaldarInventarioEnNube(); 
         localStorage.setItem('mta_productos', JSON.stringify(productos)); showToast("🗑️ Producto eliminado"); renderAdminInventario();
     }
 };
@@ -521,7 +558,7 @@ window.agregarProductoAdmin = async () => {
     if(!n || isNaN(p) || isNaN(s) || !finalImg) { btnSave.innerText = "💾 Guardar Producto en Catálogo"; btnSave.style.pointerEvents = "auto"; return showToast("⚠️ Llena todos los campos o sube una imagen"); }
     const nuevoProd = { id: Date.now(), nombre: n, cat: c, precio: p, stock: s, img: finalImg }; productos.unshift(nuevoProd);
     
-    respaldarInventarioEnNube(); // 🌟 SUBIR NUEVO PRODUCTO AL DRIVE
+    respaldarInventarioEnNube(); 
     localStorage.setItem('mta_productos', JSON.stringify(productos)); showToast("✨ Producto agregado exitosamente");
     document.getElementById('admin-add-nombre').value = ''; document.getElementById('admin-add-precio').value = ''; document.getElementById('admin-add-stock').value = ''; document.getElementById('admin-add-img-url').value = ''; document.getElementById('admin-add-img-gallery').value = ''; document.getElementById('admin-add-img-camera').value = ''; document.getElementById('file-msg-text').innerHTML = 'Ninguna imagen seleccionada'; document.getElementById('admin-add-new-cat').value = ''; document.getElementById('grupo-nueva-cat').style.display = 'none';
     btnSave.innerText = "💾 Guardar Producto en Catálogo"; btnSave.style.pointerEvents = "auto"; renderAdminInventario();
@@ -546,7 +583,7 @@ window.guardarEdicionAdmin = async () => {
     if(!n || isNaN(precio) || isNaN(stock)) { btnSave.innerText = "🔄 Actualizar Producto"; btnSave.style.pointerEvents = "auto"; return showToast("⚠️ Llena los campos básicos obligatorios"); }
     p.nombre = n; p.cat = c; p.precio = precio; p.stock = stock; p.img = finalImg;
     
-    respaldarInventarioEnNube(); // 🌟 SUBIR CAMBIO A DRIVE
+    respaldarInventarioEnNube(); 
     localStorage.setItem('mta_productos', JSON.stringify(productos)); showToast("✨ Producto actualizado exitosamente"); document.getElementById('modal-admin-editar').style.display = 'none'; renderAdminInventario();
     btnSave.innerText = "🔄 Actualizar Producto"; btnSave.style.pointerEvents = "auto";
 };
