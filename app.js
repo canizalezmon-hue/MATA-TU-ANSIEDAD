@@ -90,7 +90,6 @@ function mostrarEsqueletos() {
 // 2. Inicialización
 // ==========================================
 window.onload = async () => {
-    // 1. Mostrar estructura inmediata al usuario que ya tiene sesión
     if (usuarioActivo) {
         document.getElementById('welcome-screen').style.display = 'none';
         document.getElementById('main-nav').style.display = 'flex';
@@ -98,8 +97,8 @@ window.onload = async () => {
         
         if (usuarioActivo !== 'admin' && usuarioActivo !== 'administrador@matatuansiedad.com') {
             document.getElementById('store-content').style.display = 'block';
-            renderCategorias(); // Aparecen las categorías INSTANTÁNEAMENTE
-            mostrarEsqueletos(); // Aparece la animación gris SOLAMENTE donde van los productos
+            renderCategorias(); 
+            mostrarEsqueletos(); 
         } else {
             document.getElementById('admin-page').style.display = 'block';
         }
@@ -115,7 +114,6 @@ window.onload = async () => {
         }
     }
 
-    // 2. Ir a buscar datos reales a la nube
     try {
         const urlFresco = GOOGLE_SHEETS_API + "?t=" + new Date().getTime();
         const respuesta = await fetch(urlFresco);
@@ -141,14 +139,13 @@ window.onload = async () => {
     verificarAlarmaCobro(); 
     verificarExpiracionSesion();
 
-    // 3. Ya llegaron los datos: Reemplazar esqueletos por datos reales
     if (usuarioActivo) {
         let usuarioVerificado = usuariosDeLaNube.find(u => u.correo === usuarioActivo);
         if(usuarioVerificado && usuarioVerificado.estado === 'Bloqueado') {
             showToast(`🚫 TU CUENTA FUE BLOQUEADA.<br>Motivo: ${usuarioVerificado.motivo}`);
             cerrarSesion();
         } else {
-            ejecutarEntrada(); // Refresca pantalla con datos
+            ejecutarEntrada(); 
         }
     }
 
@@ -538,7 +535,6 @@ function renderResumenCheckout() {
     return { totalCobrarUsd, totalCobrarBs, metodo };
 }
 
-// 🔥 SE ELIMINÓ EL CLIC FANTASMA Y SE PUSO BOTÓN WHATSAPP EXPLÍCITO 🔥
 window.finalizarCompra = async () => {
     const btnComprar = document.querySelector('#checkout-page .checkout-box .btn-primary');
     if(btnComprar) { btnComprar.innerText = "⏳ Procesando Pedido..."; btnComprar.style.pointerEvents = "none"; }
@@ -555,7 +551,6 @@ window.finalizarCompra = async () => {
     await respaldarInventarioEnNube(); 
     localStorage.setItem('mta_productos', JSON.stringify(productos)); 
 
-    // 🔥 LA MAGIA OCURRE AQUÍ: Ahora pagado siempre es FALSE al nacer, sin importar el método de pago 🔥
     const nuevaFacturaGlobal = { 
         id: "MTA" + Date.now().toString().slice(-6), 
         fecha: new Date().toLocaleDateString('es-VE'), 
@@ -567,7 +562,7 @@ window.finalizarCompra = async () => {
         items: [...carrito], 
         totalUsd: totalCobrarUsd, 
         metodo: m, 
-        pagado: false, // <-- Cambiado para forzar la verificación manual del Admin
+        pagado: false, 
         entregado: false, 
         cancelado: false, 
         motivoCancelacion: "" 
@@ -575,9 +570,9 @@ window.finalizarCompra = async () => {
     
     ordenesGlobales.unshift(nuevaFacturaGlobal); localStorage.setItem('mta_global_orders', JSON.stringify(ordenesGlobales));
 
-    if (m === 'credito') {
-        await enviarDatosGoogle({ action: 'nuevaCompra', correo: usuarioActivo, nombres: n + " " + a, totalUsd: totalCobrarUsd, detalles: JSON.stringify(carrito) });
-    }
+    // 🔥 CORRECCIÓN CRÍTICA: Quitamos el "if (m === 'credito')" 🔥
+    // Ahora TODOS los pedidos (contado y crédito) se van a la base de datos para que el Admin los apruebe
+    await enviarDatosGoogle({ action: 'nuevaCompra', correo: usuarioActivo, nombres: n + " " + a, totalUsd: totalCobrarUsd, detalles: JSON.stringify(carrito) });
 
     if(btnComprar) { btnComprar.innerText = "Enviar Pedido al Líder"; btnComprar.style.pointerEvents = "auto"; }
 
