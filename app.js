@@ -555,7 +555,24 @@ window.finalizarCompra = async () => {
     await respaldarInventarioEnNube(); 
     localStorage.setItem('mta_productos', JSON.stringify(productos)); 
 
-    const nuevaFacturaGlobal = { id: "MTA" + Date.now().toString().slice(-6), fecha: new Date().toLocaleDateString('es-VE'), hora: new Date().toLocaleTimeString('es-VE'), correo: usuarioActivo, nombres: n, apellidos: a, area: u, items: [...carrito], totalUsd: totalCobrarUsd, metodo: m, pagado: (m === 'contado'), entregado: false, cancelado: false, motivoCancelacion: "" };
+    // 🔥 LA MAGIA OCURRE AQUÍ: Ahora pagado siempre es FALSE al nacer, sin importar el método de pago 🔥
+    const nuevaFacturaGlobal = { 
+        id: "MTA" + Date.now().toString().slice(-6), 
+        fecha: new Date().toLocaleDateString('es-VE'), 
+        hora: new Date().toLocaleTimeString('es-VE'), 
+        correo: usuarioActivo, 
+        nombres: n, 
+        apellidos: a, 
+        area: u, 
+        items: [...carrito], 
+        totalUsd: totalCobrarUsd, 
+        metodo: m, 
+        pagado: false, // <-- Cambiado para forzar la verificación manual del Admin
+        entregado: false, 
+        cancelado: false, 
+        motivoCancelacion: "" 
+    };
+    
     ordenesGlobales.unshift(nuevaFacturaGlobal); localStorage.setItem('mta_global_orders', JSON.stringify(ordenesGlobales));
 
     if (m === 'credito') {
