@@ -4,8 +4,8 @@
 let TASA_BCV = 36.50; 
 const NUMERO_LIDER_WHATSAPP = "584122317676"; 
 
-// 🔥 PEGA AQUÍ TU NUEVO ENLACE DE IMPLEMENTACIÓN DE GOOGLE APPS SCRIPT 🔥
-const GOOGLE_SHEETS_API = "TU_NUEVO_ENLACE_AQUI";
+// 🔥 API DE GOOGLE SHEETS (Con tu enlace original para solucionar el error de conexión) 🔥
+const GOOGLE_SHEETS_API = "https://script.google.com/macros/s/AKfycby-Fdc74UV1FnoemPVOFCw-qeB0a5kI1X57QwQVdzW6wGiYoTWRQvtSZ0IwfeHXxS_H/exec";
 
 let carrito = [];
 let usuariosDeLaNube = []; 
