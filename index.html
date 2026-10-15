@@ -7,7 +7,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
     
-    <!-- 🔥 Estilos para la barra dinámica y esqueletos de carga 🔥 -->
+    <!-- 🔥 Estilos para la barra dinámica, esqueletos y notificaciones 🔥 -->
     <style>
         .category-bar {
             display: flex;
@@ -59,6 +59,17 @@
             50% { opacity: 1; }
             100% { opacity: 0.5; }
         }
+
+        /* ANIMACIÓN DE CAMPANA */
+        @keyframes ring {
+            0% { transform: rotate(0); }
+            20% { transform: rotate(20deg); }
+            40% { transform: rotate(-20deg); }
+            60% { transform: rotate(20deg); }
+            80% { transform: rotate(-20deg); }
+            100% { transform: rotate(0); }
+        }
+        .ringing { animation: ring 0.5s ease-in-out 3; }
     </style>
 </head>
 <body>
@@ -172,7 +183,15 @@
     <!-- PANEL ADMINISTRATIVO -->
     <div id="admin-page" class="container" style="display: none;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap:10px;">
-            <h2 style="font-weight: 900; color: var(--text-main);">⚙️ Panel Administrativo</h2>
+            <!-- 🔥 NUEVO: Título con Botón de Actualizar y Campana 🔥 -->
+            <h2 style="font-weight: 900; color: var(--text-main); display: flex; align-items: center; gap: 10px;">
+                ⚙️ Panel Administrativo
+                <button id="btn-admin-refresh" class="btn-text" style="font-size:1.2rem; padding: 0 5px;" title="Actualizar Datos" onclick="sincronizarAdminManual()">🔄</button>
+                <div id="admin-bell" style="font-size:1.4rem; cursor:pointer; position:relative; padding: 0 5px;" title="Ver Nuevos Pedidos" onclick="limpiarCampana()">
+                    🔔<span id="bell-badge" style="display:none; position:absolute; top:-5px; right:-2px; background:#EF4444; color:white; border-radius:50%; padding:2px 6px; font-size:0.7rem; font-weight:bold;">0</span>
+                </div>
+            </h2>
+            
             <div style="display:flex; gap:10px; flex-wrap: wrap;">
                 <button class="btn-primary" style="padding:8px 15px; font-size:0.9rem;" onclick="cambiarSeccionAdmin('inventario')">📦 Inventario</button>
                 <button class="btn-primary" style="padding:8px 15px; font-size:0.9rem; background:#3B82F6;" onclick="cambiarSeccionAdmin('pedidos')">🧾 Pedidos</button>
@@ -227,7 +246,7 @@
         <div id="admin-seccion-pedidos" style="display:none;">
             <div class="checkout-box animate-entry" style="overflow-x: auto; padding:0;">
                 <table class="admin-table">
-                    <thead style="background: #3B82F6; color: white;"><tr><th>ID / Fecha</th><th>Cliente / Área</th><th>Monto / Modalidad</th><th>Estados</th></tr></thead>
+                    <thead style="background: #3B82F6; color: white;"><tr><th>ID / Fecha</th><th>Cliente / Área</th><th>Detalle de Compra</th><th>Estados</th></tr></thead>
                     <tbody id="admin-orders-list"></tbody>
                 </table>
             </div>
@@ -254,7 +273,7 @@
         <div id="admin-seccion-reportes" style="display:none;">
             <div class="modern-card animate-entry" style="margin-bottom: 20px; text-align: center;">
                 <h3 style="color:var(--primary); margin-bottom:10px;">📊 Contabilidad y Reportes</h3>
-                <p style="color:var(--text-sub); margin-bottom:15px;">Filtra por fechas para agrupar los pagos por cliente y descargar el Excel contable.</p>
+                <p style="color:var(--text-sub); margin-bottom:15px;">Filtra por fechas para agrupar las finanzas y descargar tus reportes en Excel.</p>
                 
                 <div style="display: flex; gap: 15px; justify-content: center; margin-bottom: 20px; flex-wrap: wrap;">
                     <div style="display: flex; flex-direction: column; text-align: left;">
@@ -268,8 +287,10 @@
                 </div>
                 
                 <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
-                    <button class="btn-primary btn-large" style="background:#8B5CF6; flex: 1; max-width: 200px;" onclick="renderAdminReportes()">🔍 Filtrar en Pantalla</button>
-                    <button class="btn-primary btn-large" style="background:#06B6D4; flex: 1; max-width: 250px;" onclick="descargarPagosCSV()">⬇️ Descargar Reporte en Excel</button>
+                    <button class="btn-primary btn-large" style="background:#8B5CF6; flex: 1; min-width: 150px;" onclick="renderAdminReportes()">🔍 Filtrar Pantalla</button>
+                    <!-- 🔥 NUEVO: BOTÓN DE DESCARGAR VENTAS DETALLADAS 🔥 -->
+                    <button class="btn-primary btn-large" style="background:#10B981; flex: 1; min-width: 200px;" onclick="descargarPedidosCSV()">⬇️ Descargar Ventas (Detallado)</button>
+                    <button class="btn-primary btn-large" style="background:#06B6D4; flex: 1; min-width: 200px;" onclick="descargarPagosCSV()">⬇️ Descargar Pagos (Deudas)</button>
                 </div>
             </div>
             <div class="checkout-box animate-entry" style="overflow-x: auto; padding:0;">

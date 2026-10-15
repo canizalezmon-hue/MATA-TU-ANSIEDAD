@@ -62,10 +62,12 @@ let temporizadorOTP = null;
 let productoEnEdicionId = null;
 
 let ordenesGlobales = []; 
-
-// 🔥 NUEVO: Ahora las configuraciones inician vacías, se llenarán con la Nube 🔥
 let diasCobroGlobales = [15, 30]; 
 let categoriasMTA = ['Dulce', 'Salado'];
+
+// 🔥 NUEVAS VARIABLES PARA EL SISTEMA DE CAMPANA 🔥
+let pollingInterval = null;
+let cantidadPedidosAnterior = 0;
 
 function mostrarEsqueletos() {
     const grid = document.getElementById('product-grid');
@@ -85,7 +87,7 @@ function mostrarEsqueletos() {
 }
 
 // ==========================================
-// 2. Inicialización
+// 2. Inicialización y Polling Admin
 // ==========================================
 window.onload = async () => {
     if (usuarioActivo) {
@@ -99,6 +101,7 @@ window.onload = async () => {
             mostrarEsqueletos(); 
         } else {
             document.getElementById('admin-page').style.display = 'block';
+            iniciarPollingAdmin(); // 🔥 Inicia la revisión silenciosa de la base de datos
         }
     } else {
         document.getElementById('welcome-screen').style.display = 'flex';
@@ -133,15 +136,15 @@ window.onload = async () => {
         } else {
             ordenesGlobales = JSON.parse(localStorage.getItem('mta_global_orders')) || [];
         }
+        cantidadPedidosAnterior = ordenesGlobales.length;
 
-        // 🔥 NUEVO: Cargar Configuración desde la Nube (Categorías y Días) 🔥
         if (dataNube.config) {
             diasCobroGlobales = dataNube.config.diasCobro;
             categoriasMTA = dataNube.config.categorias;
         }
         
     } catch(e) {
-        console.error("Error crítico al cargar desde Google Drive:", e);
+        console.error("Error crítico al cargar:", e);
         showToast("⚠️ Problemas de conexión con la base de datos.");
         productos = []; 
         ordenesGlobales = JSON.parse(localStorage.getItem('mta_global_orders')) || [];
@@ -161,7 +164,6 @@ window.onload = async () => {
         }
     }
 
-    // Refrescar las categorías visualmente después de obtenerlas de la nube
     if (usuarioActivo !== 'admin' && usuarioActivo !== 'administrador@matatuansiedad.com') {
         renderCategorias();
     }
@@ -169,6 +171,95 @@ window.onload = async () => {
     document.getElementById('input-search').addEventListener('input', () => { aplicarFiltrosGlobales(); });
     document.getElementById('chk-metodo').addEventListener('change', renderResumenCheckout);
 };
+
+// 🔥 NUEVO SISTEMA DE AUTO-ACTUALIZACIÓN (POLLING) 🔥
+function iniciarPollingAdmin() {
+    if(pollingInterval) clearInterval(pollingInterval);
+    cantidadPedidosAnterior = ordenesGlobales.length;
+    // Consulta a la nube silenciosamente cada 45 segundos
+    pollingInterval = setInterval(() => {
+        sincronizarDatosAdminSilencioso();
+    }, 45000);
+}
+
+async function sincronizarDatosAdminSilencioso() {
+    try {
+        const urlFresco = GOOGLE_SHEETS_API + "?t=" + new Date().getTime();
+        const respuesta = await fetch(urlFresco);
+        const dataNube = await respuesta.json();
+        
+        if(dataNube.pedidos) {
+            ordenesGlobales = dataNube.pedidos;
+            localStorage.setItem('mta_global_orders', JSON.stringify(ordenesGlobales));
+            
+            // Si hay más pedidos que antes, suenas la campana
+            if(ordenesGlobales.length > cantidadPedidosAnterior) {
+                let nuevos = ordenesGlobales.length - cantidadPedidosAnterior;
+                mostrarCampana(nuevos);
+                cantidadPedidosAnterior = ordenesGlobales.length;
+                reproducirSonidoNotificacion();
+                
+                // Si la pestaña de pedidos está abierta, actualízala visualmente
+                if(document.getElementById('admin-seccion-pedidos').style.display === 'block') {
+                    renderAdminPedidos();
+                }
+            }
+        }
+        if(dataNube.deudas) deudasGlobales = dataNube.deudas;
+        if(dataNube.pagos) pagosGlobales = dataNube.pagos;
+        if(dataNube.clientes) usuariosDeLaNube = dataNube.clientes;
+        if(dataNube.inventario) {
+             let unicos = []; let map = new Map();
+             for (let item of dataNube.inventario) { if(!map.has(item.id)){ map.set(item.id, true); unicos.push(item); } }
+             productos = unicos; 
+        }
+    } catch(e) { console.error("Error en polling silencioso", e); }
+}
+
+// 🔥 BOTÓN MANUAL DE ACTUALIZAR 🔥
+window.sincronizarAdminManual = async () => {
+    const btn = document.getElementById('btn-admin-refresh');
+    btn.style.transform = "rotate(180deg)";
+    btn.style.transition = "transform 0.5s ease";
+    showToast("⏳ Sincronizando en tiempo real con la nube...");
+    
+    await sincronizarDatosAdminSilencioso();
+    
+    // Refrescar la pestaña actual que tenga el admin abierta
+    const seccionActiva = document.querySelector('[id^="admin-seccion-"]:not([style*="display: none"])');
+    if(seccionActiva) {
+        cambiarSeccionAdmin(seccionActiva.id.replace('admin-seccion-', ''));
+    }
+    
+    showToast("✅ Datos actualizados");
+    setTimeout(() => { btn.style.transform = "rotate(0deg)"; }, 500);
+};
+
+function mostrarCampana(nuevos) {
+    const badge = document.getElementById('bell-badge');
+    let actuales = parseInt(badge.innerText) || 0;
+    badge.innerText = actuales + nuevos;
+    badge.style.display = 'inline-block';
+    
+    const bell = document.getElementById('admin-bell');
+    bell.classList.remove('ringing');
+    void bell.offsetWidth; // Reinicia la animación
+    bell.classList.add('ringing');
+}
+
+window.limpiarCampana = () => {
+    const badge = document.getElementById('bell-badge');
+    badge.style.display = 'none';
+    badge.innerText = "0";
+    cambiarSeccionAdmin('pedidos'); // Salta a los pedidos automáticamente
+};
+
+function reproducirSonidoNotificacion() {
+    try {
+        const audio = new Audio('https://actions.google.com/sounds/v1/alarms/digital_watch_alarm_long.ogg');
+        audio.play();
+    } catch(e) {}
+}
 
 function verificarExpiracionSesion() {
     const sessionTime = getCookie('mta_session_time');
@@ -378,6 +469,7 @@ function ejecutarEntrada() {
         document.getElementById('admin-page').style.display = 'block';
         document.getElementById('store-content').style.display = 'none'; 
         cambiarSeccionAdmin('inventario');
+        iniciarPollingAdmin(); // Inicia el vigilante
     } else {
         document.getElementById('btn-cart-nav').style.display = 'block';
         dropdown.innerHTML = `<a href="#" onclick="abrirPerfil()">Ver Mi Perfil / Facturas</a><a href="#" style="color: #EF4444;" onclick="cerrarSesion()">Cerrar Sesión</a>`;
@@ -389,7 +481,10 @@ function ejecutarEntrada() {
     }
 }
 
-window.cerrarSesion = () => { eraseCookie('mta_session_user'); eraseCookie('mta_session_data'); eraseCookie('mta_session_time'); location.reload(); };
+window.cerrarSesion = () => { 
+    if(pollingInterval) clearInterval(pollingInterval);
+    eraseCookie('mta_session_user'); eraseCookie('mta_session_data'); eraseCookie('mta_session_time'); location.reload(); 
+};
 
 // ==========================================
 // 4. Perfil y Facturas
@@ -685,7 +780,6 @@ window.procesarImagenLocal = (file) => { return new Promise((resolve) => { const
 window.agregarProductoAdmin = async () => {
     const btnSave = document.getElementById('btn-save-prod'); const n = document.getElementById('admin-add-nombre').value.trim(); let c = document.getElementById('admin-add-cat').value; const p = parseFloat(document.getElementById('admin-add-precio').value); const s = parseInt(document.getElementById('admin-add-stock').value); const urlImg = document.getElementById('admin-add-img-url').value.trim(); const fileGallery = document.getElementById('admin-add-img-gallery'); const fileCamera = document.getElementById('admin-add-img-camera');
     
-    // 🔥 NUEVO: Guardar categoría en la Nube si es nueva 🔥
     if (c === 'otra') { 
         const nuevaCat = document.getElementById('admin-add-new-cat').value.trim(); 
         if (!nuevaCat) return showToast("⚠️ Escribe la categoría"); 
@@ -722,7 +816,6 @@ window.guardarEdicionAdmin = async () => {
     const btnSave = document.getElementById('btn-update-prod'); const p = productos.find(x => x.id === productoEnEdicionId); if(!p) return;
     const n = document.getElementById('edit-nombre').value.trim(); let c = document.getElementById('edit-cat').value; const precio = parseFloat(document.getElementById('edit-precio').value); const stock = parseInt(document.getElementById('edit-stock').value); const urlImg = document.getElementById('edit-img-url').value.trim(); const fileGallery = document.getElementById('edit-img-gallery'); const fileCamera = document.getElementById('edit-img-camera');
     
-    // 🔥 NUEVO: Guardar categoría en la Nube si es nueva 🔥
     if (c === 'otra') { 
         const nuevaCat = document.getElementById('edit-new-cat').value.trim(); 
         if (!nuevaCat) return showToast("⚠️ Escribe la categoría"); 
@@ -780,6 +873,58 @@ function renderAdminDeudas() {
             <td><strong>${d.nombre}</strong><br><span style="font-size:0.75rem; color:#666;">${d.correo}</span></td>
             <td><strong>$${d.total.toFixed(2)}</strong><br><span style="font-size:0.8rem; color:var(--text-sub);">${bsActualizado.toFixed(2)} Bs</span></td>
             <td style="text-align:center;"><button type="button" class="btn-primary" style="background:#10B981; padding:5px 10px; font-size:0.75rem; width:120px;" onclick="saldarDeudaAdmin('${d.correo}')">✅ Saldar Deuda</button></td>
+        </tr>`;
+    });
+}
+
+// ==========================================
+// 9. Pedidos, Detalles y Reportes
+// ==========================================
+
+function renderAdminPedidos() {
+    const list = document.getElementById('admin-orders-list'); list.innerHTML = '';
+    if (ordenesGlobales.length === 0) { list.innerHTML = `<tr><td colspan="4" style="text-align:center;">No hay pedidos registrados</td></tr>`; return; }
+    
+    ordenesGlobales.forEach(o => {
+        let bsActualizado = o.totalUsd * TASA_BCV; 
+        
+        let botonesEstado = "";
+        if (o.cancelado) {
+            botonesEstado = `<span style="color:#EF4444; font-size:0.8rem; font-weight:bold; display:block; margin-top:5px;">🚫 Cancelado: ${o.motivoCancelacion}</span>`;
+        } else {
+            let txtEntrega = o.entregado ? '✅ Entregado' : '🚚 Marcar Entregado'; 
+            let colorEntrega = o.entregado ? '#10B981' : '#6B7280'; 
+            let btnEntrega = `<button type="button" class="btn-primary" style="background:${colorEntrega}; padding:5px 10px; font-size:0.75rem; margin-bottom:5px; width: 140px;" onclick="toggleAdminStatus('${o.id}', 'entrega')">${txtEntrega}</button><br>`;
+            
+            let btnPago = "";
+            if (o.pagado) {
+                btnPago = `<button type="button" class="btn-primary" style="background:#10B981; padding:5px 10px; font-size:0.75rem; width: 140px; margin-bottom:5px; cursor:not-allowed;" disabled>✅ Pagado</button><br>`;
+            } else {
+                btnPago = `<button type="button" class="btn-primary" style="background:#F59E0B; padding:5px 10px; font-size:0.75rem; width: 140px; margin-bottom:5px;" onclick="pagarPedidoDesdeAdmin('${o.id}')">💰 Marcar Pagado</button><br>`;
+            }
+
+            let btnCancelar = `<button type="button" class="btn-primary" style="background:#EF4444; padding:5px 10px; font-size:0.75rem; width: 140px; margin-top:5px;" onclick="cancelarPedidoAdmin('${o.id}')">🚫 Cancelar</button>`;
+            
+            botonesEstado = btnEntrega + btnPago + btnCancelar;
+        }
+
+        // 🔥 NUEVO: LISTA DE PRODUCTOS VISIBLE EN LA TABLA 🔥
+        let itemsStr = "";
+        if(o.items && o.items.length > 0) {
+            itemsStr = o.items.map(i => `<span style="color:#555; font-size:0.75rem;">• ${i.qty}x ${i.nombre}</span>`).join('<br>');
+        }
+        
+        list.innerHTML += `<tr>
+            <td><strong>#${o.id}</strong><br><span style="font-size:0.75rem; color:#666;">${o.fecha} ${o.hora}</span></td>
+            <td><strong>${o.nombres} ${o.apellidos}</strong><br><span style="font-size:0.8rem; color:var(--primary);">${o.area}</span></td>
+            <td>
+                <strong>$${o.totalUsd.toFixed(2)}</strong><br>
+                <span style="font-size:0.7rem; font-weight:bold;">${o.metodo.toUpperCase()}</span><br>
+                <div style="margin-top:5px; background:#fdfdfd; padding:6px; border:1px solid #eee; border-radius:5px; max-width:200px;">
+                    ${itemsStr}
+                </div>
+            </td>
+            <td>${botonesEstado}</td>
         </tr>`;
     });
 }
@@ -872,87 +1017,45 @@ window.descargarPagosCSV = () => {
     document.body.removeChild(link);
 };
 
-window.saldarDeudaAdmin = async (correo) => {
-    if(confirm("¿Estás seguro de perdonar/saldar esta deuda? Esto la pondrá en $0 en la base de datos de forma permanente.")) {
-        showToast("⏳ Procesando el pago en la Nube...");
-        await enviarDatosGoogle({ action: 'marcarPagado', correo: correo });
-        
-        let deuda = deudasGlobales.find(d => d.correo === correo);
-        if(deuda) deuda.total = 0;
-        
-        ordenesGlobales.forEach(o => { if (o.correo === correo && o.metodo === 'credito') o.pagado = true; });
-        localStorage.setItem('mta_global_orders', JSON.stringify(ordenesGlobales));
-        
-        showToast("✅ Deuda saldada correctamente.");
-        renderAdminDeudas();
-    }
-};
-
-window.bloquearUsuarioAdmin = async (correo) => {
-    let motivo = prompt("Indica el motivo del bloqueo (Ej: Debe dinero, Facturas pendientes):");
-    if(motivo) {
-        showToast("⏳ Bloqueando usuario en la Nube...");
-        await enviarDatosGoogle({ action: 'bloquearCliente', correo: correo, motivo: motivo });
-        let usr = usuariosDeLaNube.find(u => u.correo === correo);
-        if(usr) { usr.estado = 'Bloqueado'; usr.motivo = motivo; }
-        showToast("🚫 Usuario bloqueado exitosamente.");
-        renderAdminUsuarios();
-    }
-};
-
-window.desbloquearUsuarioAdmin = async (correo) => {
-    showToast("⏳ Desbloqueando usuario en la Nube...");
-    await enviarDatosGoogle({ action: 'desbloquearCliente', correo: correo });
-    let usr = usuariosDeLaNube.find(u => u.correo === correo);
-    if(usr) { usr.estado = 'Activo'; usr.motivo = ""; }
-    showToast("✅ Usuario activado exitosamente.");
-    renderAdminUsuarios();
-};
-
-window.eliminarUsuarioAdmin = async (correo) => {
-    if(confirm("⚠️ ¿Estás COMPLETAMENTE SEGURO de eliminar a este usuario? Perderá acceso inmediato.")) {
-        showToast("⏳ Eliminando usuario en la Nube...");
-        await enviarDatosGoogle({ action: 'eliminarCliente', correo: correo });
-        usuariosDeLaNube = usuariosDeLaNube.filter(u => u.correo !== correo);
-        showToast("🗑️ Usuario borrado. Si no debía dinero, también se eliminó de la matriz.");
-        renderAdminUsuarios();
-    }
-};
-
-// ==========================================
-// 9. Pedidos y Configuración Admin
-// ==========================================
-
-function renderAdminPedidos() {
-    const list = document.getElementById('admin-orders-list'); list.innerHTML = '';
-    if (ordenesGlobales.length === 0) { list.innerHTML = `<tr><td colspan="4" style="text-align:center;">No hay pedidos registrados</td></tr>`; return; }
+// 🔥 NUEVO: EXPORTAR VENTAS CON DETALLE DE PRODUCTOS 🔥
+window.descargarPedidosCSV = () => {
+    let fInicioStr = document.getElementById('reporte-inicio').value;
+    let fFinStr = document.getElementById('reporte-fin').value;
     
-    ordenesGlobales.forEach(o => {
-        let bsActualizado = o.totalUsd * TASA_BCV; 
-        
-        let botonesEstado = "";
-        if (o.cancelado) {
-            botonesEstado = `<span style="color:#EF4444; font-size:0.8rem; font-weight:bold; display:block; margin-top:5px;">🚫 Cancelado: ${o.motivoCancelacion}</span>`;
-        } else {
-            let txtEntrega = o.entregado ? '✅ Entregado' : '🚚 Marcar Entregado'; 
-            let colorEntrega = o.entregado ? '#10B981' : '#6B7280'; 
-            let btnEntrega = `<button type="button" class="btn-primary" style="background:${colorEntrega}; padding:5px 10px; font-size:0.75rem; margin-bottom:5px; width: 140px;" onclick="toggleAdminStatus('${o.id}', 'entrega')">${txtEntrega}</button><br>`;
-            
-            let btnPago = "";
-            if (o.pagado) {
-                btnPago = `<button type="button" class="btn-primary" style="background:#10B981; padding:5px 10px; font-size:0.75rem; width: 140px; margin-bottom:5px; cursor:not-allowed;" disabled>✅ Pagado</button><br>`;
-            } else {
-                btnPago = `<button type="button" class="btn-primary" style="background:#F59E0B; padding:5px 10px; font-size:0.75rem; width: 140px; margin-bottom:5px;" onclick="pagarPedidoDesdeAdmin('${o.id}')">💰 Marcar Pagado</button><br>`;
+    let filtrados = ordenesGlobales;
+    
+    if (fInicioStr && fFinStr) {
+        let dInicio = new Date(fInicioStr + "T00:00:00");
+        let dFin = new Date(fFinStr + "T23:59:59");
+        filtrados = ordenesGlobales.filter(p => { 
+            let parts = p.fecha.split('/'); // Asumiendo formato DD/MM/YYYY
+            if(parts.length === 3) {
+                let d = new Date(`${parts[2]}-${parts[1].padStart(2,'0')}-${parts[0].padStart(2,'0')}T12:00:00`);
+                return d >= dInicio && d <= dFin; 
             }
+            return true; 
+        });
+    }
 
-            let btnCancelar = `<button type="button" class="btn-primary" style="background:#EF4444; padding:5px 10px; font-size:0.75rem; width: 140px; margin-top:5px;" onclick="cancelarPedidoAdmin('${o.id}')">🚫 Cancelar</button>`;
-            
-            botonesEstado = btnEntrega + btnPago + btnCancelar;
-        }
-        
-        list.innerHTML += `<tr><td><strong>#${o.id}</strong><br><span style="font-size:0.75rem; color:#666;">${o.fecha} ${o.hora}</span></td><td><strong>${o.nombres} ${o.apellidos}</strong><br><span style="font-size:0.8rem; color:var(--primary);">${o.area}</span></td><td><strong>$${o.totalUsd.toFixed(2)}</strong><br><span style="font-size:0.75rem;">${bsActualizado.toFixed(2)} Bs</span><br><span style="font-size:0.7rem; font-weight:bold;">${o.metodo.toUpperCase()}</span></td><td>${botonesEstado}</td></tr>`;
+    if(filtrados.length === 0) return showToast("No hay ventas para exportar en estas fechas.");
+    
+    let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
+    csvContent += "ID PEDIDO;FECHA;CLIENTE;AREA;MODALIDAD;TOTAL USD;ESTADO;DETALLE DE PRODUCTOS\n";
+    
+    filtrados.forEach(o => {
+        let itemsDetalle = o.items ? o.items.map(i => `${i.qty}x ${i.nombre}`).join(', ') : '';
+        let estado = o.cancelado ? 'Cancelado' : (o.pagado ? 'Pagado' : 'Deuda/Pendiente');
+        csvContent += `${o.id};${o.fecha} ${o.hora};${o.nombres} ${o.apellidos};${o.area};${o.metodo};${o.totalUsd.toFixed(2)};${estado};${itemsDetalle}\n`;
     });
-}
+
+    var encodedUri = encodeURI(csvContent);
+    var link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `Reporte_Ventas_MTA_${fInicioStr || 'Todo'}_al_${fFinStr || 'Todo'}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+};
 
 window.pagarPedidoDesdeAdmin = async (id) => {
     let order = ordenesGlobales.find(o => o.id === id);
@@ -1027,9 +1130,55 @@ window.cancelarPedidoAdmin = async (id) => {
     }
 };
 
+window.saldarDeudaAdmin = async (correo) => {
+    if(confirm("¿Estás seguro de perdonar/saldar esta deuda? Esto la pondrá en $0 en la base de datos de forma permanente.")) {
+        showToast("⏳ Procesando el pago en la Nube...");
+        await enviarDatosGoogle({ action: 'marcarPagado', correo: correo });
+        
+        let deuda = deudasGlobales.find(d => d.correo === correo);
+        if(deuda) deuda.total = 0;
+        
+        ordenesGlobales.forEach(o => { if (o.correo === correo && o.metodo === 'credito') o.pagado = true; });
+        localStorage.setItem('mta_global_orders', JSON.stringify(ordenesGlobales));
+        
+        showToast("✅ Deuda saldada correctamente.");
+        renderAdminDeudas();
+    }
+};
+
+window.bloquearUsuarioAdmin = async (correo) => {
+    let motivo = prompt("Indica el motivo del bloqueo (Ej: Debe dinero, Facturas pendientes):");
+    if(motivo) {
+        showToast("⏳ Bloqueando usuario en la Nube...");
+        await enviarDatosGoogle({ action: 'bloquearCliente', correo: correo, motivo: motivo });
+        let usr = usuariosDeLaNube.find(u => u.correo === correo);
+        if(usr) { usr.estado = 'Bloqueado'; usr.motivo = motivo; }
+        showToast("🚫 Usuario bloqueado exitosamente.");
+        renderAdminUsuarios();
+    }
+};
+
+window.desbloquearUsuarioAdmin = async (correo) => {
+    showToast("⏳ Desbloqueando usuario en la Nube...");
+    await enviarDatosGoogle({ action: 'desbloquearCliente', correo: correo });
+    let usr = usuariosDeLaNube.find(u => u.correo === correo);
+    if(usr) { usr.estado = 'Activo'; usr.motivo = ""; }
+    showToast("✅ Usuario activado exitosamente.");
+    renderAdminUsuarios();
+};
+
+window.eliminarUsuarioAdmin = async (correo) => {
+    if(confirm("⚠️ ¿Estás COMPLETAMENTE SEGURO de eliminar a este usuario? Perderá acceso inmediato.")) {
+        showToast("⏳ Eliminando usuario en la Nube...");
+        await enviarDatosGoogle({ action: 'eliminarCliente', correo: correo });
+        usuariosDeLaNube = usuariosDeLaNube.filter(u => u.correo !== correo);
+        showToast("🗑️ Usuario borrado. Si no debía dinero, también se eliminó de la matriz.");
+        renderAdminUsuarios();
+    }
+};
+
 function renderAdminConfig() { document.getElementById('cfg-dia-1').value = diasCobroGlobales[0] || 15; document.getElementById('cfg-dia-2').value = diasCobroGlobales[1] || 30; }
 
-// 🔥 NUEVO: Guardar Días de Cobro directamente en la Nube 🔥
 window.guardarDiasCobro = async () => {
     const d1 = parseInt(document.getElementById('cfg-dia-1').value); const d2 = parseInt(document.getElementById('cfg-dia-2').value);
     if(isNaN(d1) || isNaN(d2) || d1 < 1 || d1 > 31 || d2 < 1 || d2 > 31) return showToast("⚠️ Días inválidos (debe ser del 1 al 31)");
