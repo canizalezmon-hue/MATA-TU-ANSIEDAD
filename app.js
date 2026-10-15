@@ -4,7 +4,7 @@
 let TASA_BCV = 36.50; 
 const NUMERO_LIDER_WHATSAPP = "584122317676"; 
 
-// 🔥 API DE GOOGLE SHEETS (Con tu enlace original para solucionar el error de conexión) 🔥
+// 🔥 API DE GOOGLE SHEETS (Con tu enlace original) 🔥
 const GOOGLE_SHEETS_API = "https://script.google.com/macros/s/AKfycby-Fdc74UV1FnoemPVOFCw-qeB0a5kI1X57QwQVdzW6wGiYoTWRQvtSZ0IwfeHXxS_H/exec";
 
 let carrito = [];
@@ -62,7 +62,7 @@ let datosTemporales = {};
 let temporizadorOTP = null;
 let productoEnEdicionId = null;
 
-let ordenesGlobales = JSON.parse(localStorage.getItem('mta_global_orders')) || [];
+let ordenesGlobales = []; // 🔥 Modificado para que siempre cargue desde la nube 🔥
 let diasCobroGlobales = JSON.parse(localStorage.getItem('mta_dias_cobro')) || [15, 30]; 
 let categoriasMTA = JSON.parse(localStorage.getItem('mta_categorias')) || ['Dulce', 'Salado'];
 
@@ -129,10 +129,19 @@ window.onload = async () => {
         if(dataNube.deudas) deudasGlobales = dataNube.deudas; 
         if(dataNube.pagos) pagosGlobales = dataNube.pagos; 
         
+        // 🔥 NUEVO: Cargar los pedidos desde la Nube para el Administrador 🔥
+        if(dataNube.pedidos) {
+            ordenesGlobales = dataNube.pedidos;
+            localStorage.setItem('mta_global_orders', JSON.stringify(ordenesGlobales));
+        } else {
+            ordenesGlobales = JSON.parse(localStorage.getItem('mta_global_orders')) || [];
+        }
+        
     } catch(e) {
         console.error("Error crítico al cargar desde Google Drive:", e);
         showToast("⚠️ Problemas de conexión con la base de datos.");
         productos = []; 
+        ordenesGlobales = JSON.parse(localStorage.getItem('mta_global_orders')) || [];
     }
 
     await obtenerTasaBCV(); 
@@ -459,7 +468,10 @@ function renderProductos(lista) {
 
 window.abrirDetalle = (id) => {
     const p = productos.find(x => x.id === id); if(!p) return;
+    
+    // 🔥 CORRECCIÓN: Se agregó el asterisco de multiplicar (*) 🔥
     const precioMostrarUsd = `$${p.precio.toFixed(2)} USD`; const precioMostrarBs = `${(p.precio * TASA_BCV).toFixed(2)} Bs`;
+    
     let btnAñadirHtml = '';
     if (usuarioActivo !== 'admin' && usuarioActivo !== 'administrador@matatuansiedad.com') {
         btnAñadirHtml = `<button type="button" class="btn-primary" ${p.stock <= 0 ? 'disabled' : ''} onclick="agregarAlCarrito(${p.id}); cerrarModales();" style="width: 100%;">${p.stock <= 0 ? 'Agotado' : 'Añadir al Carrito 🛒'}</button>`;
@@ -491,6 +503,7 @@ function renderContenidoCarrito() {
     else {
         carrito.forEach((item, index) => {
             subtotal += item.precio * item.qty;
+            // 🔥 CORRECCIÓN: Se agregó el asterisco de multiplicar (*) 🔥
             list.innerHTML += `<div class="cart-item"><span style="flex:2; text-align:left; font-size:0.9rem;">${item.nombre}</span><div class="qty-controls"><button class="qty-btn" onclick="cambiarCant(${index}, -1)">-</button><span>${item.qty}</span><button class="qty-btn" onclick="cambiarCant(${index}, 1)">+</button></div><span style="flex:1; text-align:right; font-weight:bold;">$${(item.precio * item.qty).toFixed(2)}</span></div>`;
         });
     }
@@ -570,7 +583,15 @@ window.finalizarCompra = async () => {
     
     ordenesGlobales.unshift(nuevaFacturaGlobal); localStorage.setItem('mta_global_orders', JSON.stringify(ordenesGlobales));
 
-    await enviarDatosGoogle({ action: 'nuevaCompra', correo: usuarioActivo, nombres: n + " " + a, totalUsd: totalCobrarUsd, detalles: JSON.stringify(carrito) });
+    // 🔥 NUEVO: Enviar toda la orden detallada a la Nube para que el Admin la vea 🔥
+    await enviarDatosGoogle({ 
+        action: 'nuevaCompra', 
+        correo: usuarioActivo, 
+        nombres: n + " " + a, 
+        totalUsd: totalCobrarUsd, 
+        detalles: JSON.stringify(carrito),
+        pedido: JSON.stringify(nuevaFacturaGlobal)
+    });
 
     if(btnComprar) { btnComprar.innerText = "Enviar Pedido al Líder"; btnComprar.style.pointerEvents = "auto"; }
 
@@ -916,7 +937,8 @@ window.pagarPedidoDesdeAdmin = async (id) => {
                 action: 'pagarPedidoEspecifico', 
                 correo: order.correo, 
                 monto: order.totalUsd,
-                nombre: order.nombres + " " + order.apellidos
+                nombre: order.nombres + " " + order.apellidos,
+                idPedido: order.id // 🔥 CORRECCIÓN: Enviar el ID del pedido para actualizarlo en la Nube
             });
 
             order.pagado = true;
@@ -932,6 +954,9 @@ window.toggleAdminStatus = async (id, tipo) => {
     if(order) {
         if(tipo === 'entrega') {
             order.entregado = !order.entregado;
+            showToast("⏳ Actualizando entrega en la Nube...");
+            // 🔥 CORRECCIÓN: Sincronizar el estado con la Nube 🔥
+            await enviarDatosGoogle({action: 'actualizarPedido', idPedido: id, campo: 'entregado', valor: order.entregado});
             showToast(order.entregado ? "✅ Pedido marcado como Entregado" : "⏳ Pedido marcado como NO Entregado");
         }
         localStorage.setItem('mta_global_orders', JSON.stringify(ordenesGlobales)); 
@@ -950,14 +975,21 @@ window.cancelarPedidoAdmin = async (id) => {
             for (let item of productos) { if(!map.has(item.id)){ map.set(item.id, true); unicos.push(item); } }
             productos = unicos;
             
-            showToast("⏳ Restaurando inventario y descontando deuda...");
+            showToast("⏳ Restaurando inventario y cancelando en la Nube...");
             await respaldarInventarioEnNube();
             localStorage.setItem('mta_productos', JSON.stringify(productos));
 
             if(order.metodo === 'credito' && !order.pagado) {
                 await enviarDatosGoogle({ action: 'cancelarCompra', correo: order.correo, totalUsd: order.totalUsd, detalles: JSON.stringify(order.items) });
             }
-            localStorage.setItem('mta_global_orders', JSON.stringify(ordenesGlobales)); showToast("✅ Pedido cancelado correctamente."); renderAdminPedidos();
+            
+            // 🔥 CORRECCIÓN: Sincronizar cancelación con la Nube 🔥
+            await enviarDatosGoogle({action: 'actualizarPedido', idPedido: id, campo: 'cancelado', valor: motivo});
+
+            localStorage.setItem('mta_global_orders', JSON.stringify(ordenesGlobales)); 
+            showToast("✅ Pedido cancelado correctamente."); 
+            renderAdminPedidos();
+
             let cliente = usuariosDeLaNube.find(u => u.correo === order.correo); let telefonoCliente = cliente ? cliente.telefono : "";
             
             if(telefonoCliente) {
