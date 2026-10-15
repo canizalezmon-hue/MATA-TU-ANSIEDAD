@@ -13,7 +13,7 @@ let deudasGlobales = [];
 let pagosGlobales = []; 
 let ordenesGlobales = []; 
 
-// 🔥 NUEVAS VARIABLES: INVERSIONES Y GRAFICOS 🔥
+// Variables para Inversiones y Gráficos
 let inversionesGlobales = [];
 let chartInstancia = null; 
 
@@ -119,8 +119,6 @@ window.onload = async () => {
         if(dataNube.clientes) usuariosDeLaNube = dataNube.clientes;
         if(dataNube.deudas) deudasGlobales = dataNube.deudas; 
         if(dataNube.pagos) pagosGlobales = dataNube.pagos; 
-        
-        // Cargar Inversiones desde la Nube
         if(dataNube.inversiones) inversionesGlobales = dataNube.inversiones;
 
         if(dataNube.pedidos) {
@@ -195,7 +193,6 @@ async function sincronizarDatosAdminSilencioso() {
              for (let item of dataNube.inventario) { if(!map.has(item.id)){ map.set(item.id, true); unicos.push(item); } }
              productos = unicos; 
         }
-        // Refrescar Dashboard si está abierto
         if(document.getElementById('admin-seccion-dashboard').style.display === 'block') renderDashboard();
     } catch(e) {}
 }
@@ -469,7 +466,7 @@ function ejecutarEntrada() {
         dropdown.innerHTML = `<a href="#" onclick="abrirPanelAdmin()">⚙️ Panel Administrativo</a><a href="#" style="color: #EF4444;" onclick="cerrarSesion()">Cerrar Sesión</a>`;
         document.getElementById('admin-page').style.display = 'block';
         document.getElementById('store-content').style.display = 'none'; 
-        cambiarSeccionAdmin('dashboard'); // Abrir el Dashboard por defecto
+        cambiarSeccionAdmin('dashboard'); 
         iniciarPollingAdmin(); 
     } else {
         document.getElementById('btn-cart-nav').style.display = 'block';
@@ -662,7 +659,6 @@ window.finalizarCompra = async () => {
     const n = document.getElementById('chk-nombres').value; const a = document.getElementById('chk-apellidos').value; const u = document.getElementById('chk-ubicacion').value; const m = document.getElementById('chk-metodo').value;
     const { totalCobrarUsd, totalCobrarBs } = renderResumenCheckout();
 
-    // Capturar el costo exacto en el momento de la venta
     carrito = carrito.map(item => {
         let pInv = productos.find(p => p.id === item.id);
         if(pInv) pInv.stock -= item.qty; 
@@ -740,7 +736,7 @@ window.cambiarSeccionAdmin = (seccion) => {
     if(seccion === 'config') renderAdminConfig();
 };
 
-// 🔥 LÓGICA DEL DASHBOARD DE INTELIGENCIA DE NEGOCIO 🔥
+// 🔥 LÓGICA CORREGIDA DEL DASHBOARD (CON PARSEADOR DE FECHAS ROBUSTO) 🔥
 function renderDashboard() {
     let hoy = new Date();
     let hace15Dias = new Date(); hace15Dias.setDate(hoy.getDate() - 15);
@@ -748,7 +744,6 @@ function renderDashboard() {
     let ventas15 = 0; let costo15 = 0;
     let labels = []; let dataVentas = []; let dataGanancia = [];
 
-    // Generar etiquetas para los últimos 7 días
     for(let i=6; i>=0; i--) {
         let d = new Date(); d.setDate(hoy.getDate() - i);
         labels.push(d.toLocaleDateString('es-VE', {day: '2-digit', month: 'short'}));
@@ -756,10 +751,16 @@ function renderDashboard() {
     }
 
     ordenesGlobales.forEach(o => {
-        let parts = o.fecha.split('/');
-        if(parts.length !== 3) return;
-        let datePed = new Date(`${parts[2]}-${parts[1].padStart(2,'0')}-${parts[0].padStart(2,'0')}T12:00:00`); 
-        
+        let datePed;
+        if (o.fecha.includes('/')) {
+            let parts = o.fecha.split('/');
+            if(parts.length === 3) datePed = new Date(`${parts[2]}-${parts[1].padStart(2,'0')}-${parts[0].padStart(2,'0')}T12:00:00`);
+        } else {
+            datePed = new Date(o.fecha);
+        }
+
+        if (!datePed || isNaN(datePed.getTime())) return;
+
         if(datePed >= hace15Dias && datePed <= hoy && !o.cancelado) {
             ventas15 += o.totalUsd;
             let costoPedido = 0;
@@ -767,7 +768,6 @@ function renderDashboard() {
             costo15 += costoPedido;
         }
 
-        // Datos para el gráfico (Últimos 7 días)
         let diffTime = hoy.getTime() - datePed.getTime();
         let diffDays = Math.ceil(diffTime / (1000 * 3600 * 24)) - 1; 
         if(diffDays >= 0 && diffDays < 7 && !o.cancelado) {
@@ -965,16 +965,49 @@ window.descargarPagosCSV = () => {
 };
 
 window.descargarPedidosCSV = () => { 
-    let fInicioStr = document.getElementById('reporte-inicio').value; let fFinStr = document.getElementById('reporte-fin').value; let filtrados = ordenesGlobales; 
-    if (fInicioStr && fFinStr) { let dInicio = new Date(fInicioStr + "T00:00:00"); let dFin = new Date(fFinStr + "T23:59:59"); filtrados = ordenesGlobales.filter(p => { let parts = p.fecha.split('/'); if(parts.length === 3) { let d = new Date(`${parts[2]}-${parts[1].padStart(2,'0')}-${parts[0].padStart(2,'0')}T12:00:00`); return d >= dInicio && d <= dFin; } return true; }); } 
+    let fInicioStr = document.getElementById('reporte-inicio').value; 
+    let fFinStr = document.getElementById('reporte-fin').value; 
+    let filtrados = ordenesGlobales; 
+    
+    if (fInicioStr && fFinStr) { 
+        let dInicio = new Date(fInicioStr + "T00:00:00"); 
+        let dFin = new Date(fFinStr + "T23:59:59"); 
+        
+        filtrados = ordenesGlobales.filter(p => { 
+            let datePed;
+            if (p.fecha.includes('/')) {
+                let parts = p.fecha.split('/');
+                if(parts.length === 3) datePed = new Date(`${parts[2]}-${parts[1].padStart(2,'0')}-${parts[0].padStart(2,'0')}T12:00:00`);
+            } else {
+                datePed = new Date(p.fecha);
+            }
+            if (!datePed || isNaN(datePed.getTime())) return true;
+            return datePed >= dInicio && datePed <= dFin; 
+        }); 
+    } 
+    
     if(filtrados.length === 0) return showToast("No hay ventas para exportar en estas fechas."); 
-    let csvContent = "data:text/csv;charset=utf-8,\uFEFF"; csvContent += "ID PEDIDO;FECHA;CLIENTE;AREA;MODALIDAD;TOTAL USD;ESTADO;DETALLE DE PRODUCTOS\n"; 
-    filtrados.forEach(o => { let itemsDetalle = o.items ? o.items.map(i => `${i.qty}x ${i.nombre}`).join(', ') : ''; let estado = o.cancelado ? 'Cancelado' : (o.pagado ? 'Pagado' : 'Deuda/Pendiente'); csvContent += `${o.id};${o.fecha} ${o.hora};${o.nombres} ${o.apellidos};${o.area};${o.metodo};${o.totalUsd.toFixed(2)};${estado};${itemsDetalle}\n`; }); 
-    var encodedUri = encodeURI(csvContent); var link = document.createElement("a"); link.setAttribute("href", encodedUri); link.setAttribute("download", `Reporte_Ventas_MTA_${fInicioStr || 'Todo'}_al_${fFinStr || 'Todo'}.csv`); document.body.appendChild(link); link.click(); document.body.removeChild(link); 
+    
+    let csvContent = "data:text/csv;charset=utf-8,\uFEFF"; 
+    csvContent += "ID PEDIDO;FECHA;CLIENTE;AREA;MODALIDAD;TOTAL USD;ESTADO;DETALLE DE PRODUCTOS\n"; 
+    
+    filtrados.forEach(o => { 
+        let itemsDetalle = o.items ? o.items.map(i => `${i.qty}x ${i.nombre}`).join(', ') : ''; 
+        let estado = o.cancelado ? 'Cancelado' : (o.pagado ? 'Pagado' : 'Deuda/Pendiente'); 
+        csvContent += `${o.id};${o.fecha} ${o.hora};${o.nombres} ${o.apellidos};${o.area};${o.metodo};${o.totalUsd.toFixed(2)};${estado};${itemsDetalle}\n`; 
+    }); 
+    
+    var encodedUri = encodeURI(csvContent); 
+    var link = document.createElement("a"); 
+    link.setAttribute("href", encodedUri); 
+    link.setAttribute("download", `Reporte_Ventas_MTA_${fInicioStr || 'Todo'}_al_${fFinStr || 'Todo'}.csv`); 
+    document.body.appendChild(link); 
+    link.click(); 
+    document.body.removeChild(link); 
 };
 
 window.pagarPedidoDesdeAdmin = async (id) => { let order = ordenesGlobales.find(o => o.id === id); if(order && !order.pagado) { if(confirm(`¿Confirmas que el cliente pagó $${order.totalUsd.toFixed(2)} por este pedido?\n\nAl aceptar, esto se descontará de su deuda y pasará a los Reportes CSV.`)) { showToast("⏳ Procesando pago en la base de datos..."); await enviarDatosGoogle({ action: 'pagarPedidoEspecifico', correo: order.correo, monto: order.totalUsd, nombre: order.nombres + " " + order.apellidos, idPedido: order.id }); order.pagado = true; localStorage.setItem('mta_global_orders', JSON.stringify(ordenesGlobales)); showToast("✅ Pago registrado. El cliente ya puede ver su recibo como Pagado."); renderAdminPedidos(); } } };
-window.toggleAdminStatus = async (id, tipo) => { let order = ordenesGlobales.find(o => o.id === id); if(order) { if(tipo === 'entrega') { order.entregado = !order.entregado; showToast("⏳ Actualizando entrega en la Nube..."); await enviarDatosGoogle({action: 'actualizarPedido', idPedido: id, campo: 'entregado', valor: order.entregado}); showToast(order.entregado ? "✅ Pedido marcado como Entregado" : "⏳ Pedido marcado como NO Entregado"); } localStorage.setItem('mta_global_orders', JSON.stringify(ordenesGlobales)); renderAdminPedidos(); } };
+window.toggleAdminStatus = async (id, tipo) => { let order = ordenesGlobales.find(o => o.id === id); if(order) { if(tipo === 'entrega') { order.entregado = !order.entregado; showToast("⏳ Actualizando entrega en la Nube..."); await enviarDatosGoogle({action: 'actualizarPedido', idPedido: id, campo: 'entrega', valor: order.entregado}); showToast(order.entregado ? "✅ Pedido marcado como Entregado" : "⏳ Pedido marcado como NO Entregado"); } localStorage.setItem('mta_global_orders', JSON.stringify(ordenesGlobales)); renderAdminPedidos(); } };
 window.cancelarPedidoAdmin = async (id) => { let order = ordenesGlobales.find(o => o.id === id); if(order && !order.cancelado) { let motivo = prompt("Indique el motivo de la cancelación para que el cliente lo vea:"); if(motivo) { order.cancelado = true; order.motivoCancelacion = motivo; order.items.forEach(item => { let prod = productos.find(p => p.id === item.id); if(prod) prod.stock += item.qty; }); let unicos = []; let map = new Map(); for (let item of productos) { if(!map.has(item.id)){ map.set(item.id, true); unicos.push(item); } } productos = unicos; showToast("⏳ Restaurando inventario y cancelando en la Nube..."); await respaldarInventarioEnNube(); localStorage.setItem('mta_productos', JSON.stringify(productos)); if(order.metodo === 'credito' && !order.pagado) { await enviarDatosGoogle({ action: 'cancelarCompra', correo: order.correo, totalUsd: order.totalUsd, detalles: JSON.stringify(order.items) }); } await enviarDatosGoogle({action: 'actualizarPedido', idPedido: id, campo: 'cancelado', valor: motivo}); localStorage.setItem('mta_global_orders', JSON.stringify(ordenesGlobales)); showToast("✅ Pedido cancelado correctamente."); renderAdminPedidos(); let cliente = usuariosDeLaNube.find(u => u.correo === order.correo); let telefonoCliente = cliente ? cliente.telefono : ""; if(telefonoCliente) { telefonoCliente = telefonoCliente.replace(/\D/g, ''); if (telefonoCliente.startsWith('0')) telefonoCliente = '58' + telefonoCliente.substring(1); else if (telefonoCliente.length === 10) telefonoCliente = '58' + telefonoCliente; let txtCancelacion = `🚫 *MATA TU ANSIEDAD - PEDIDO CANCELADO*%0A%0AHola *${order.nombres}*, te informamos que tu pedido #${order.id} ha sido cancelado.%0A%0A*Motivo:* ${motivo}%0A%0AEl saldo a deber (si aplica) ha sido ajustado. Si tienes dudas, puedes responder a este mensaje. ¡Gracias!`; window.open(`https://wa.me/${telefonoCliente}?text=${txtCancelacion}`, '_blank'); } else { showToast("⚠️ El usuario no tiene un teléfono registrado para notificar por WhatsApp."); } } } };
 window.saldarDeudaAdmin = async (correo) => { if(confirm("¿Estás seguro de perdonar/saldar esta deuda? Esto la pondrá en $0 en la base de datos de forma permanente.")) { showToast("⏳ Procesando el pago en la Nube..."); await enviarDatosGoogle({ action: 'marcarPagado', correo: correo }); let deuda = deudasGlobales.find(d => d.correo === correo); if(deuda) deuda.total = 0; ordenesGlobales.forEach(o => { if (o.correo === correo && o.metodo === 'credito') o.pagado = true; }); localStorage.setItem('mta_global_orders', JSON.stringify(ordenesGlobales)); showToast("✅ Deuda saldada correctamente."); renderAdminDeudas(); } };
 window.bloquearUsuarioAdmin = async (correo) => { let motivo = prompt("Indica el motivo del bloqueo (Ej: Debe dinero, Facturas pendientes):"); if(motivo) { showToast("⏳ Bloqueando usuario en la Nube..."); await enviarDatosGoogle({ action: 'bloquearCliente', correo: correo, motivo: motivo }); let usr = usuariosDeLaNube.find(u => u.correo === correo); if(usr) { usr.estado = 'Bloqueado'; usr.motivo = motivo; } showToast("🚫 Usuario bloqueado exitosamente."); renderAdminUsuarios(); } };
