@@ -7,76 +7,29 @@
     <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
     
-    <!-- 🔥 Estilos para la barra dinámica, esqueletos y notificaciones 🔥 -->
-    <style>
-        .category-bar {
-            display: flex;
-            gap: 10px;
-            overflow-x: auto;
-            padding-bottom: 10px;
-            margin-bottom: 20px;
-            scrollbar-width: none; 
-        }
-        .category-bar::-webkit-scrollbar { display: none; }
-        .cat-btn {
-            background: #f3f4f6;
-            border: 1px solid #ddd;
-            border-radius: 20px;
-            padding: 8px 16px;
-            font-size: 0.9rem;
-            color: #555;
-            cursor: pointer;
-            white-space: nowrap;
-            transition: all 0.3s ease;
-            font-family: 'Nunito', sans-serif;
-            font-weight: 700;
-        }
-        .cat-btn.active {
-            background: var(--primary);
-            color: white;
-            border-color: var(--primary);
-            box-shadow: 0 4px 6px rgba(236, 72, 153, 0.3);
-        }
+    <!-- 🔥 LIBRERÍA PARA GRÁFICOS (Chart.js) 🔥 -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-        /* ESQUELETOS DE CARGA RAPIDA */
-        .skeleton-card {
-            background: #fff;
-            border-radius: 12px;
-            padding: 15px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            animation: pulse 1.5s infinite ease-in-out;
-        }
+    <!-- Estilos para la barra dinámica, esqueletos y notificaciones -->
+    <style>
+        .category-bar { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 10px; margin-bottom: 20px; scrollbar-width: none; }
+        .category-bar::-webkit-scrollbar { display: none; }
+        .cat-btn { background: #f3f4f6; border: 1px solid #ddd; border-radius: 20px; padding: 8px 16px; font-size: 0.9rem; color: #555; cursor: pointer; white-space: nowrap; transition: all 0.3s ease; font-family: 'Nunito', sans-serif; font-weight: 700; }
+        .cat-btn.active { background: var(--primary); color: white; border-color: var(--primary); box-shadow: 0 4px 6px rgba(236, 72, 153, 0.3); }
+
+        .skeleton-card { background: #fff; border-radius: 12px; padding: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); display: flex; flex-direction: column; gap: 10px; animation: pulse 1.5s infinite ease-in-out; }
         .skeleton-img { width: 100%; height: 120px; background: #e2e8f0; border-radius: 8px; }
         .skeleton-title { width: 70%; height: 20px; background: #e2e8f0; border-radius: 4px; margin: 5px auto; }
         .skeleton-price { width: 40%; height: 15px; background: #e2e8f0; border-radius: 4px; margin: 0 auto; }
         .skeleton-btn-load { width: 100%; height: 35px; background: #e2e8f0; border-radius: 20px; margin-top: 10px; }
 
-        @keyframes pulse {
-            0% { opacity: 0.5; }
-            50% { opacity: 1; }
-            100% { opacity: 0.5; }
-        }
-
-        /* ANIMACIÓN DE CAMPANA */
-        @keyframes ring {
-            0% { transform: rotate(0); }
-            20% { transform: rotate(20deg); }
-            40% { transform: rotate(-20deg); }
-            60% { transform: rotate(20deg); }
-            80% { transform: rotate(-20deg); }
-            100% { transform: rotate(0); }
-        }
+        @keyframes pulse { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
+        @keyframes ring { 0% { transform: rotate(0); } 20% { transform: rotate(20deg); } 40% { transform: rotate(-20deg); } 60% { transform: rotate(20deg); } 80% { transform: rotate(-20deg); } 100% { transform: rotate(0); } }
         .ringing { animation: ring 0.5s ease-in-out 3; }
     </style>
 </head>
 <body>
-    <div id="cobro-banner" style="display:none;">
-        🚨 ¡ATENCIÓN! HOY ES DÍA OFICIAL DE COBROS Y PAGOS PENDIENTES 🚨
-    </div>
-
+    <div id="cobro-banner" style="display:none;">🚨 ¡ATENCIÓN! HOY ES DÍA OFICIAL DE COBROS Y PAGOS PENDIENTES 🚨</div>
     <div id="toast-container"></div>
 
     <div id="welcome-screen" class="auth-overlay">
@@ -145,12 +98,7 @@
     </nav>
 
     <div id="store-content" class="container" style="display: none;">
-        
-        <!-- 🔥 BARRA DE CATEGORÍAS 🔥 -->
-        <div id="category-filters" class="category-bar">
-            <!-- Se llena dinámicamente con JavaScript -->
-        </div>
-
+        <div id="category-filters" class="category-bar"></div>
         <h2 class="section-title">Nuestros Antojos Disponibles</h2>
         <div id="search-error" style="display: none; text-align: center; color: #666; margin-top: 20px;">No encontramos ese producto o categoría :(</div>
         <div id="product-grid" class="grid"></div>
@@ -183,7 +131,6 @@
     <!-- PANEL ADMINISTRATIVO -->
     <div id="admin-page" class="container" style="display: none;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap:10px;">
-            <!-- 🔥 NUEVO: Título con Botón de Actualizar y Campana 🔥 -->
             <h2 style="font-weight: 900; color: var(--text-main); display: flex; align-items: center; gap: 10px;">
                 ⚙️ Panel Administrativo
                 <button id="btn-admin-refresh" class="btn-text" style="font-size:1.2rem; padding: 0 5px;" title="Actualizar Datos" onclick="sincronizarAdminManual()">🔄</button>
@@ -193,12 +140,65 @@
             </h2>
             
             <div style="display:flex; gap:10px; flex-wrap: wrap;">
+                <!-- 🔥 NUEVOS BOTONES DE DASHBOARD E INVERSIONES 🔥 -->
+                <button class="btn-primary" style="padding:8px 15px; font-size:0.9rem; background:#4F46E5;" onclick="cambiarSeccionAdmin('dashboard')">📈 Dashboard</button>
+                <button class="btn-primary" style="padding:8px 15px; font-size:0.9rem; background:#E11D48;" onclick="cambiarSeccionAdmin('inversiones')">🧾 Inversiones</button>
+                
                 <button class="btn-primary" style="padding:8px 15px; font-size:0.9rem;" onclick="cambiarSeccionAdmin('inventario')">📦 Inventario</button>
                 <button class="btn-primary" style="padding:8px 15px; font-size:0.9rem; background:#3B82F6;" onclick="cambiarSeccionAdmin('pedidos')">🧾 Pedidos</button>
                 <button class="btn-primary" style="padding:8px 15px; font-size:0.9rem; background:#10B981;" onclick="cambiarSeccionAdmin('usuarios')">👥 Usuarios</button>
                 <button class="btn-primary" style="padding:8px 15px; font-size:0.9rem; background:#F59E0B;" onclick="cambiarSeccionAdmin('deudas')">💰 Deudas</button>
                 <button class="btn-primary" style="padding:8px 15px; font-size:0.9rem; background:#06B6D4;" onclick="cambiarSeccionAdmin('reportes')">📊 Reportes CSV</button>
                 <button class="btn-primary" style="padding:8px 15px; font-size:0.9rem; background:#8B5CF6;" onclick="cambiarSeccionAdmin('config')">⚙️ Ajustes</button>
+            </div>
+        </div>
+
+        <!-- 🔥 NUEVA PESTAÑA: DASHBOARD GRÁFICO 🔥 -->
+        <div id="admin-seccion-dashboard" style="display:none;">
+            <div class="modern-card animate-entry" style="margin-bottom: 20px;">
+                <h3 style="color:var(--primary); margin-bottom:15px;">📊 Rendimiento Financiero (Últimos 15 Días)</h3>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
+                    <div style="background:#E0E7FF; padding:15px; border-radius:10px; border-left:4px solid #4F46E5;">
+                        <h4 style="color:#4F46E5; margin-bottom:5px;">Ingresos Brutos</h4>
+                        <h2 id="dash-ventas-15" style="color:#333;">$0.00</h2>
+                    </div>
+                    <div style="background:#D1FAE5; padding:15px; border-radius:10px; border-left:4px solid #10B981;">
+                        <h4 style="color:#10B981; margin-bottom:5px;">Ganancia Neta (Pura)</h4>
+                        <h2 id="dash-ganancia-15" style="color:#333;">$0.00</h2>
+                    </div>
+                    <div style="background:#FFE4E6; padding:15px; border-radius:10px; border-left:4px solid #E11D48;">
+                        <h4 style="color:#E11D48; margin-bottom:5px;">Total Invertido Histórico</h4>
+                        <h2 id="dash-inversiones" style="color:#333;">$0.00</h2>
+                    </div>
+                    <div style="background:#FEF3C7; padding:15px; border-radius:10px; border-left:4px solid #F59E0B;">
+                        <h4 style="color:#F59E0B; margin-bottom:5px;">ROI (Retorno)</h4>
+                        <h2 id="dash-roi" style="color:#333;">0%</h2>
+                    </div>
+                </div>
+                <!-- Gráfico de Ventas de los últimos 7 días -->
+                <div style="position: relative; height: 350px; width: 100%;">
+                    <canvas id="ventasChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- 🔥 NUEVA PESTAÑA: INVERSIONES / COMPRAS 🔥 -->
+        <div id="admin-seccion-inversiones" style="display:none;">
+            <div class="modern-card animate-entry" style="margin-bottom: 20px;">
+                <h3 style="color:var(--primary); margin-bottom:15px;">💸 Registro de Inversiones a Proveedores</h3>
+                <div class="modern-form-grid">
+                    <div class="input-group"><input type="date" id="inv-fecha" required><label>Fecha de Compra</label></div>
+                    <div class="input-group"><input type="text" id="inv-factura" required><label>N° Factura / Recibo</label></div>
+                    <div class="input-group"><input type="text" id="inv-desc" required><label>Descripción (Ej. Makro, Proveedor)</label></div>
+                    <div class="input-group"><input type="number" id="inv-monto" step="0.10" required><label>Monto Invertido (USD)</label></div>
+                </div>
+                <button type="button" class="btn-primary btn-large" style="background:#E11D48;" onclick="guardarInversionAdmin()">💾 Registrar Inversión / Gasto</button>
+            </div>
+            <div class="checkout-box animate-entry" style="overflow-x: auto; padding:0;">
+                <table class="admin-table">
+                    <thead style="background: #E11D48; color: white;"><tr><th>Fecha</th><th>N° Factura</th><th>Descripción</th><th>Monto Invertido</th></tr></thead>
+                    <tbody id="admin-inversiones-list"></tbody>
+                </table>
             </div>
         </div>
         
@@ -215,8 +215,13 @@
                         <label style="top: -8px; left: 10px; font-size: 0.75rem; background: #fff; padding: 0 5px; color: var(--primary);">Categoría</label>
                     </div>
                     <div class="input-group" id="grupo-nueva-cat" style="display: none;"><input type="text" id="admin-add-new-cat"><label>Escribe la Nueva Categoría</label></div>
-                    <div class="input-group"><input type="number" id="admin-add-precio" step="0.10" required><label>Precio (USD)</label></div>
+                    
+                    <!-- 🔥 NUEVO: CAMPO DE COSTO 🔥 -->
+                    <div class="input-group"><input type="number" id="admin-add-costo" step="0.10" required><label>Costo de Compra (Tu inversión USD)</label></div>
+                    
+                    <div class="input-group"><input type="number" id="admin-add-precio" step="0.10" required><label>Precio Venta Base (USD)</label></div>
                     <div class="input-group"><input type="number" id="admin-add-stock" required><label>Stock Inicial</label></div>
+                    
                     <div style="grid-column: span 2; margin-top: 10px;">
                         <p style="font-size: 0.85rem; font-weight: bold; margin-bottom: 10px; color: var(--text-sub);">Imagen del Producto:</p>
                         <div style="display: flex; gap: 15px; margin-bottom: 10px;">
@@ -237,12 +242,13 @@
             </div>
             <div class="checkout-box animate-entry" style="overflow-x: auto; padding: 0;">
                 <table class="admin-table">
-                    <thead style="background: var(--primary); color: white;"><tr><th>Producto</th><th>Precio (USD / Bs)</th><th>Stock Actual</th><th style="text-align:center;">Acciones</th></tr></thead>
+                    <thead style="background: var(--primary); color: white;"><tr><th>Producto</th><th>Costo / Precio Venta</th><th>Stock Actual</th><th style="text-align:center;">Acciones</th></tr></thead>
                     <tbody id="admin-inventory-list"></tbody>
                 </table>
             </div>
         </div>
 
+        <!-- RESTO DEL CÓDIGO HTML DE PESTAÑAS (Igual) -->
         <div id="admin-seccion-pedidos" style="display:none;">
             <div class="checkout-box animate-entry" style="overflow-x: auto; padding:0;">
                 <table class="admin-table">
@@ -274,7 +280,6 @@
             <div class="modern-card animate-entry" style="margin-bottom: 20px; text-align: center;">
                 <h3 style="color:var(--primary); margin-bottom:10px;">📊 Contabilidad y Reportes</h3>
                 <p style="color:var(--text-sub); margin-bottom:15px;">Filtra por fechas para agrupar las finanzas y descargar tus reportes en Excel.</p>
-                
                 <div style="display: flex; gap: 15px; justify-content: center; margin-bottom: 20px; flex-wrap: wrap;">
                     <div style="display: flex; flex-direction: column; text-align: left;">
                         <label style="font-size: 0.8rem; font-weight: bold; color: var(--text-sub);">Desde:</label>
@@ -285,10 +290,8 @@
                         <input type="date" id="reporte-fin" class="input-form" style="margin-bottom: 0;">
                     </div>
                 </div>
-                
                 <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
                     <button class="btn-primary btn-large" style="background:#8B5CF6; flex: 1; min-width: 150px;" onclick="renderAdminReportes()">🔍 Filtrar Pantalla</button>
-                    <!-- 🔥 NUEVO: BOTÓN DE DESCARGAR VENTAS DETALLADAS 🔥 -->
                     <button class="btn-primary btn-large" style="background:#10B981; flex: 1; min-width: 200px;" onclick="descargarPedidosCSV()">⬇️ Descargar Ventas (Detallado)</button>
                     <button class="btn-primary btn-large" style="background:#06B6D4; flex: 1; min-width: 200px;" onclick="descargarPagosCSV()">⬇️ Descargar Pagos (Deudas)</button>
                 </div>
@@ -328,8 +331,12 @@
                     <label style="top: -8px; left: 10px; font-size: 0.75rem; background: #fff; padding: 0 5px; color: var(--primary);">Categoría</label>
                 </div>
                 <div class="input-group" id="grupo-nueva-cat-edit" style="display: none;"><input type="text" id="edit-new-cat"><label>Escribe la Nueva Categoría</label></div>
-                <div class="input-group"><input type="number" id="edit-precio" step="0.10" required><label>Precio (USD)</label></div>
-                <div class="input-group"><input type="number" id="edit-stock" required><label>Stock Actual</label></div>
+                
+                <!-- 🔥 NUEVO: CAMPO COSTO EN EDICIÓN 🔥 -->
+                <div class="input-group"><input type="number" id="edit-costo" step="0.10" required><label>Costo (Inversión USD)</label></div>
+                
+                <div class="input-group"><input type="number" id="edit-precio" step="0.10" required><label>Precio (Venta USD)</label></div>
+                <div class="input-group" style="grid-column: span 2;"><input type="number" id="edit-stock" required><label>Stock Actual</label></div>
             </div>
             <div style="text-align: center; margin-bottom: 15px;">
                 <p style="font-size: 0.85rem; font-weight: bold; color: var(--text-sub);">Imagen Actual:</p>
