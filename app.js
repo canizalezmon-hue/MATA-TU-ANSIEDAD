@@ -4,8 +4,8 @@
 let TASA_BCV = 36.50; 
 const NUMERO_LIDER_WHATSAPP = "584122317676"; 
 
-// 🔥 API DE GOOGLE SHEETS 🔥
-const GOOGLE_SHEETS_API = "https://script.google.com/macros/s/AKfycby-Fdc74UV1FnoemPVOFCw-qeB0a5kI1X57QwQVdzW6wGiYoTWRQvtSZ0IwfeHXxS_H/exec";
+// 🔥 PEGA AQUÍ TU NUEVO ENLACE DE IMPLEMENTACIÓN DE GOOGLE APPS SCRIPT 🔥
+const GOOGLE_SHEETS_API = "TU_NUEVO_ENLACE_AQUI";
 
 let carrito = [];
 let usuariosDeLaNube = []; 
@@ -570,8 +570,6 @@ window.finalizarCompra = async () => {
     
     ordenesGlobales.unshift(nuevaFacturaGlobal); localStorage.setItem('mta_global_orders', JSON.stringify(ordenesGlobales));
 
-    // 🔥 CORRECCIÓN CRÍTICA: Quitamos el "if (m === 'credito')" 🔥
-    // Ahora TODOS los pedidos (contado y crédito) se van a la base de datos para que el Admin los apruebe
     await enviarDatosGoogle({ action: 'nuevaCompra', correo: usuarioActivo, nombres: n + " " + a, totalUsd: totalCobrarUsd, detalles: JSON.stringify(carrito) });
 
     if(btnComprar) { btnComprar.innerText = "Enviar Pedido al Líder"; btnComprar.style.pointerEvents = "auto"; }
