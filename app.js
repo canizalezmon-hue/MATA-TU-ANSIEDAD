@@ -4,7 +4,6 @@
 let TASA_BCV = 36.50; 
 const NUMERO_LIDER_WHATSAPP = "584122317676"; 
 
-// 🔥 API DE GOOGLE SHEETS (Con tu enlace original) 🔥
 const GOOGLE_SHEETS_API = "https://script.google.com/macros/s/AKfycby-Fdc74UV1FnoemPVOFCw-qeB0a5kI1X57QwQVdzW6wGiYoTWRQvtSZ0IwfeHXxS_H/exec";
 
 let carrito = [];
@@ -62,13 +61,12 @@ let datosTemporales = {};
 let temporizadorOTP = null;
 let productoEnEdicionId = null;
 
-let ordenesGlobales = []; // 🔥 Modificado para que siempre cargue desde la nube 🔥
-let diasCobroGlobales = JSON.parse(localStorage.getItem('mta_dias_cobro')) || [15, 30]; 
-let categoriasMTA = JSON.parse(localStorage.getItem('mta_categorias')) || ['Dulce', 'Salado'];
+let ordenesGlobales = []; 
 
-// ==========================================
-// 🔥 FUNCIÓN DE ESQUELETOS CORREGIDA
-// ==========================================
+// 🔥 NUEVO: Ahora las configuraciones inician vacías, se llenarán con la Nube 🔥
+let diasCobroGlobales = [15, 30]; 
+let categoriasMTA = ['Dulce', 'Salado'];
+
 function mostrarEsqueletos() {
     const grid = document.getElementById('product-grid');
     if (grid) {
@@ -129,12 +127,17 @@ window.onload = async () => {
         if(dataNube.deudas) deudasGlobales = dataNube.deudas; 
         if(dataNube.pagos) pagosGlobales = dataNube.pagos; 
         
-        // 🔥 NUEVO: Cargar los pedidos desde la Nube para el Administrador 🔥
         if(dataNube.pedidos) {
             ordenesGlobales = dataNube.pedidos;
             localStorage.setItem('mta_global_orders', JSON.stringify(ordenesGlobales));
         } else {
             ordenesGlobales = JSON.parse(localStorage.getItem('mta_global_orders')) || [];
+        }
+
+        // 🔥 NUEVO: Cargar Configuración desde la Nube (Categorías y Días) 🔥
+        if (dataNube.config) {
+            diasCobroGlobales = dataNube.config.diasCobro;
+            categoriasMTA = dataNube.config.categorias;
         }
         
     } catch(e) {
@@ -156,6 +159,11 @@ window.onload = async () => {
         } else {
             ejecutarEntrada(); 
         }
+    }
+
+    // Refrescar las categorías visualmente después de obtenerlas de la nube
+    if (usuarioActivo !== 'admin' && usuarioActivo !== 'administrador@matatuansiedad.com') {
+        renderCategorias();
     }
 
     document.getElementById('input-search').addEventListener('input', () => { aplicarFiltrosGlobales(); });
@@ -469,7 +477,6 @@ function renderProductos(lista) {
 window.abrirDetalle = (id) => {
     const p = productos.find(x => x.id === id); if(!p) return;
     
-    // 🔥 CORRECCIÓN: Se agregó el asterisco de multiplicar (*) 🔥
     const precioMostrarUsd = `$${p.precio.toFixed(2)} USD`; const precioMostrarBs = `${(p.precio * TASA_BCV).toFixed(2)} Bs`;
     
     let btnAñadirHtml = '';
@@ -503,7 +510,6 @@ function renderContenidoCarrito() {
     else {
         carrito.forEach((item, index) => {
             subtotal += item.precio * item.qty;
-            // 🔥 CORRECCIÓN: Se agregó el asterisco de multiplicar (*) 🔥
             list.innerHTML += `<div class="cart-item"><span style="flex:2; text-align:left; font-size:0.9rem;">${item.nombre}</span><div class="qty-controls"><button class="qty-btn" onclick="cambiarCant(${index}, -1)">-</button><span>${item.qty}</span><button class="qty-btn" onclick="cambiarCant(${index}, 1)">+</button></div><span style="flex:1; text-align:right; font-weight:bold;">$${(item.precio * item.qty).toFixed(2)}</span></div>`;
         });
     }
@@ -583,7 +589,6 @@ window.finalizarCompra = async () => {
     
     ordenesGlobales.unshift(nuevaFacturaGlobal); localStorage.setItem('mta_global_orders', JSON.stringify(ordenesGlobales));
 
-    // 🔥 NUEVO: Enviar toda la orden detallada a la Nube para que el Admin la vea 🔥
     await enviarDatosGoogle({ 
         action: 'nuevaCompra', 
         correo: usuarioActivo, 
@@ -679,7 +684,18 @@ window.procesarImagenLocal = (file) => { return new Promise((resolve) => { const
 
 window.agregarProductoAdmin = async () => {
     const btnSave = document.getElementById('btn-save-prod'); const n = document.getElementById('admin-add-nombre').value.trim(); let c = document.getElementById('admin-add-cat').value; const p = parseFloat(document.getElementById('admin-add-precio').value); const s = parseInt(document.getElementById('admin-add-stock').value); const urlImg = document.getElementById('admin-add-img-url').value.trim(); const fileGallery = document.getElementById('admin-add-img-gallery'); const fileCamera = document.getElementById('admin-add-img-camera');
-    if (c === 'otra') { const nuevaCat = document.getElementById('admin-add-new-cat').value.trim(); if (!nuevaCat) return showToast("⚠️ Escribe la categoría"); c = nuevaCat.charAt(0).toUpperCase() + nuevaCat.slice(1).toLowerCase(); if (!categoriasMTA.includes(c)) { categoriasMTA.push(c); localStorage.setItem('mta_categorias', JSON.stringify(categoriasMTA)); } }
+    
+    // 🔥 NUEVO: Guardar categoría en la Nube si es nueva 🔥
+    if (c === 'otra') { 
+        const nuevaCat = document.getElementById('admin-add-new-cat').value.trim(); 
+        if (!nuevaCat) return showToast("⚠️ Escribe la categoría"); 
+        c = nuevaCat.charAt(0).toUpperCase() + nuevaCat.slice(1).toLowerCase(); 
+        if (!categoriasMTA.includes(c)) { 
+            categoriasMTA.push(c); 
+            enviarDatosGoogle({ action: 'guardarConfiguracion', categorias: categoriasMTA.join(',') }); 
+        } 
+    }
+    
     let fileToUpload = null; if (fileGallery.files && fileGallery.files[0]) fileToUpload = fileGallery.files[0]; else if (fileCamera.files && fileCamera.files[0]) fileToUpload = fileCamera.files[0];
     let finalImg = urlImg; if (fileToUpload) { btnSave.innerText = "⏳ Procesando Foto..."; btnSave.style.pointerEvents = "none"; finalImg = await procesarImagenLocal(fileToUpload); }
     if(!n || isNaN(p) || isNaN(s) || !finalImg) { btnSave.innerText = "💾 Guardar Producto en Catálogo"; btnSave.style.pointerEvents = "auto"; return showToast("⚠️ Llena todos los campos o sube una imagen"); }
@@ -705,7 +721,18 @@ window.abrirModalEditar = (id) => {
 window.guardarEdicionAdmin = async () => {
     const btnSave = document.getElementById('btn-update-prod'); const p = productos.find(x => x.id === productoEnEdicionId); if(!p) return;
     const n = document.getElementById('edit-nombre').value.trim(); let c = document.getElementById('edit-cat').value; const precio = parseFloat(document.getElementById('edit-precio').value); const stock = parseInt(document.getElementById('edit-stock').value); const urlImg = document.getElementById('edit-img-url').value.trim(); const fileGallery = document.getElementById('edit-img-gallery'); const fileCamera = document.getElementById('edit-img-camera');
-    if (c === 'otra') { const nuevaCat = document.getElementById('edit-new-cat').value.trim(); if (!nuevaCat) return showToast("⚠️ Escribe la categoría"); c = nuevaCat.charAt(0).toUpperCase() + nuevaCat.slice(1).toLowerCase(); if (!categoriasMTA.includes(c)) { categoriasMTA.push(c); localStorage.setItem('mta_categorias', JSON.stringify(categoriasMTA)); } }
+    
+    // 🔥 NUEVO: Guardar categoría en la Nube si es nueva 🔥
+    if (c === 'otra') { 
+        const nuevaCat = document.getElementById('edit-new-cat').value.trim(); 
+        if (!nuevaCat) return showToast("⚠️ Escribe la categoría"); 
+        c = nuevaCat.charAt(0).toUpperCase() + nuevaCat.slice(1).toLowerCase(); 
+        if (!categoriasMTA.includes(c)) { 
+            categoriasMTA.push(c); 
+            enviarDatosGoogle({ action: 'guardarConfiguracion', categorias: categoriasMTA.join(',') });
+        } 
+    }
+    
     let fileToUpload = null; if (fileGallery && fileGallery.files && fileGallery.files[0]) fileToUpload = fileGallery.files[0]; else if (fileCamera && fileCamera.files && fileCamera.files[0]) fileToUpload = fileCamera.files[0];
     btnSave.innerText = "⏳ Procesando..."; btnSave.style.pointerEvents = "none";
     let finalImg = urlImg; if (fileToUpload) { finalImg = await procesarImagenLocal(fileToUpload); } else if (!urlImg) { finalImg = p.img; }
@@ -938,7 +965,7 @@ window.pagarPedidoDesdeAdmin = async (id) => {
                 correo: order.correo, 
                 monto: order.totalUsd,
                 nombre: order.nombres + " " + order.apellidos,
-                idPedido: order.id // 🔥 CORRECCIÓN: Enviar el ID del pedido para actualizarlo en la Nube
+                idPedido: order.id 
             });
 
             order.pagado = true;
@@ -955,7 +982,6 @@ window.toggleAdminStatus = async (id, tipo) => {
         if(tipo === 'entrega') {
             order.entregado = !order.entregado;
             showToast("⏳ Actualizando entrega en la Nube...");
-            // 🔥 CORRECCIÓN: Sincronizar el estado con la Nube 🔥
             await enviarDatosGoogle({action: 'actualizarPedido', idPedido: id, campo: 'entregado', valor: order.entregado});
             showToast(order.entregado ? "✅ Pedido marcado como Entregado" : "⏳ Pedido marcado como NO Entregado");
         }
@@ -983,7 +1009,6 @@ window.cancelarPedidoAdmin = async (id) => {
                 await enviarDatosGoogle({ action: 'cancelarCompra', correo: order.correo, totalUsd: order.totalUsd, detalles: JSON.stringify(order.items) });
             }
             
-            // 🔥 CORRECCIÓN: Sincronizar cancelación con la Nube 🔥
             await enviarDatosGoogle({action: 'actualizarPedido', idPedido: id, campo: 'cancelado', valor: motivo});
 
             localStorage.setItem('mta_global_orders', JSON.stringify(ordenesGlobales)); 
@@ -1004,10 +1029,18 @@ window.cancelarPedidoAdmin = async (id) => {
 
 function renderAdminConfig() { document.getElementById('cfg-dia-1').value = diasCobroGlobales[0] || 15; document.getElementById('cfg-dia-2').value = diasCobroGlobales[1] || 30; }
 
-window.guardarDiasCobro = () => {
+// 🔥 NUEVO: Guardar Días de Cobro directamente en la Nube 🔥
+window.guardarDiasCobro = async () => {
     const d1 = parseInt(document.getElementById('cfg-dia-1').value); const d2 = parseInt(document.getElementById('cfg-dia-2').value);
     if(isNaN(d1) || isNaN(d2) || d1 < 1 || d1 > 31 || d2 < 1 || d2 > 31) return showToast("⚠️ Días inválidos (debe ser del 1 al 31)");
-    diasCobroGlobales = [d1, d2]; localStorage.setItem('mta_dias_cobro', JSON.stringify(diasCobroGlobales)); showToast(`✅ Días de cobro actualizados al ${d1} y ${d2} del mes.`); verificarAlarmaCobro();
+    
+    showToast("⏳ Guardando fechas en la nube...");
+    diasCobroGlobales = [d1, d2]; 
+    
+    await enviarDatosGoogle({ action: 'guardarConfiguracion', diasCobro: diasCobroGlobales.join(',') });
+    
+    showToast(`✅ Días de cobro actualizados al ${d1} y ${d2} para todos los usuarios.`); 
+    verificarAlarmaCobro();
 };
 
 window.cerrarModales = () => { document.querySelectorAll('.modal').forEach(m => m.style.display = 'none'); };
