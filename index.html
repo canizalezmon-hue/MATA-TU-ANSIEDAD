@@ -6,32 +6,16 @@
     <title>Mata Tu Ansiedad | Confitería</title>
     <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
-    
-    <!-- 🔥 LIBRERÍA PARA GRÁFICOS (Chart.js) 🔥 -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
-    <!-- Estilos para la barra dinámica, esqueletos y notificaciones -->
-    <style>
-        .category-bar { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 10px; margin-bottom: 20px; scrollbar-width: none; }
-        .category-bar::-webkit-scrollbar { display: none; }
-        .cat-btn { background: #f3f4f6; border: 1px solid #ddd; border-radius: 20px; padding: 8px 16px; font-size: 0.9rem; color: #555; cursor: pointer; white-space: nowrap; transition: all 0.3s ease; font-family: 'Nunito', sans-serif; font-weight: 700; }
-        .cat-btn.active { background: var(--primary); color: white; border-color: var(--primary); box-shadow: 0 4px 6px rgba(236, 72, 153, 0.3); }
-
-        .skeleton-card { background: #fff; border-radius: 12px; padding: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); display: flex; flex-direction: column; gap: 10px; animation: pulse 1.5s infinite ease-in-out; }
-        .skeleton-img { width: 100%; height: 120px; background: #e2e8f0; border-radius: 8px; }
-        .skeleton-title { width: 70%; height: 20px; background: #e2e8f0; border-radius: 4px; margin: 5px auto; }
-        .skeleton-price { width: 40%; height: 15px; background: #e2e8f0; border-radius: 4px; margin: 0 auto; }
-        .skeleton-btn-load { width: 100%; height: 35px; background: #e2e8f0; border-radius: 20px; margin-top: 10px; }
-
-        @keyframes pulse { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
-        @keyframes ring { 0% { transform: rotate(0); } 20% { transform: rotate(20deg); } 40% { transform: rotate(-20deg); } 60% { transform: rotate(20deg); } 80% { transform: rotate(-20deg); } 100% { transform: rotate(0); } }
-        .ringing { animation: ring 0.5s ease-in-out 3; }
-    </style>
 </head>
 <body>
-    <div id="cobro-banner" style="display:none;">🚨 ¡ATENCIÓN! HOY ES DÍA OFICIAL DE COBROS Y PAGOS PENDIENTES 🚨</div>
+    <!-- BANNER DE ALARMA DE COBRO -->
+    <div id="cobro-banner" style="display:none;">
+        🚨 ¡ATENCIÓN! HOY ES DÍA OFICIAL DE COBROS Y PAGOS PENDIENTES 🚨
+    </div>
+
     <div id="toast-container"></div>
 
+    <!-- PANTALLA DE BIENVENIDA -->
     <div id="welcome-screen" class="auth-overlay">
         <div class="auth-box">
             <h1 style="color: var(--primary); margin-bottom: 5px;">🍬 Mata Tu Ansiedad</h1>
@@ -42,68 +26,70 @@
                 <button id="tab-register" class="tab-btn" onclick="cambiarTabAuth('register')">Registrarse</button>
             </div>
 
-            <form id="auth-form-container" onsubmit="event.preventDefault(); procesarAuth();">
+            <div id="auth-form-container">
                 <div id="register-fields" style="display: none;">
-                    <input type="text" id="reg-nombres" class="input-form" placeholder="Nombres" autocomplete="given-name">
-                    <input type="text" id="reg-apellidos" class="input-form" placeholder="Apellidos" autocomplete="family-name">
+                    <input type="text" id="reg-nombres" class="input-form" placeholder="Nombres">
+                    <input type="text" id="reg-apellidos" class="input-form" placeholder="Apellidos">
                     <input type="text" id="reg-area" class="input-form" placeholder="Área de Trabajo (Ej. Farmacia, Piso 2)">
-                    <input type="tel" id="reg-telefono" class="input-form" placeholder="Teléfono de Contacto" autocomplete="tel">
+                    <input type="tel" id="reg-telefono" class="input-form" placeholder="Teléfono de Contacto">
                 </div>
                 
-                <input type="email" id="auth-email" class="input-form" placeholder="Correo electrónico" autocomplete="username" style="margin-bottom: 8px;">
-                
-                <div id="email-shortcuts" style="display: none; gap: 8px; justify-content: center; margin-bottom: 15px; flex-wrap: wrap;">
-                    <button type="button" class="btn-text" style="font-size: 0.75rem; background: #f3f4f6; padding: 5px 12px; border-radius: 12px; color: #555; border: 1px solid #ddd;" onclick="completarDominio('@gmail.com')">@gmail.com</button>
-                    <button type="button" class="btn-text" style="font-size: 0.75rem; background: #f3f4f6; padding: 5px 12px; border-radius: 12px; color: #555; border: 1px solid #ddd;" onclick="completarDominio('@hotmail.com')">@hotmail.com</button>
-                    <button type="button" class="btn-text" style="font-size: 0.75rem; background: #f3f4f6; padding: 5px 12px; border-radius: 12px; color: #555; border: 1px solid #ddd;" onclick="completarDominio('@outlook.com')">@outlook.com</button>
-                </div>
+                <input type="email" id="auth-email" class="input-form" placeholder="Correo electrónico">
                 
                 <div id="password-area" style="position: relative;">
-                    <input type="password" id="auth-password" class="input-form" placeholder="Contraseña" autocomplete="current-password" style="padding-right: 40px; margin-bottom: 5px;">
+                    <input type="password" id="auth-password" class="input-form" placeholder="Contraseña" style="padding-right: 40px;">
                     <button type="button" id="toggle-pwd-btn" onclick="togglePassword()" style="position: absolute; right: 10px; top: 12px; background: none; border: none; cursor: pointer; font-size: 1.2rem;">👁️</button>
-                    <div style="text-align: right; margin-bottom: 15px;">
-                        <button type="button" class="btn-text" style="font-size: 0.85rem; font-weight: normal; color: var(--text-sub);" onclick="iniciarRecuperacion()">¿Olvidaste tu contraseña?</button>
-                    </div>
                 </div>
 
+                <!-- Checkbox para recordar datos -->
                 <div id="remember-area" style="text-align: left; margin-bottom: 15px;">
                     <label style="font-size: 0.9rem; cursor: pointer; display: flex; align-items: center; gap: 8px; color: var(--text-sub);">
                         <input type="checkbox" id="remember-me" style="cursor: pointer; width: 16px; height: 16px;">
-                        Mantener mi sesión iniciada
+                        Recordar mis datos
                     </label>
                 </div>
                 
                 <div id="verification-area" style="display: none;">
-                    <p style="font-size: 0.85rem; font-weight: bold; margin-bottom: 10px; color: var(--primary);">Ingresa el código de 6 dígitos:</p>
-                    <input type="text" id="auth-code" inputmode="numeric" pattern="[0-9]*" class="input-form" placeholder="Ej: 123456" maxlength="6">
-                    <button type="button" class="btn-text" onclick="generarYMostrarCodigoOTP()" style="font-size: 0.85rem; margin-bottom: 15px; width: 100%; text-align: center;">¿No viste el código? Generar otro</button>
+                    <p style="font-size: 0.85rem; font-weight: bold; margin-bottom: 10px; color: var(--primary);">Ingresa el código que apareció arriba:</p>
+                    <input type="text" id="auth-code" class="input-form" placeholder="Ej: 123456" maxlength="6">
+                    <button class="btn-text" onclick="generarYMostrarCodigoOTP()" style="font-size: 0.85rem; margin-bottom: 15px; width: 100%; text-align: center;">¿No viste el código? Generar otro</button>
                 </div>
                 
-                <button type="submit" id="btn-auth-action" class="btn-primary" style="width: 100%;">Entrar</button>
-            </form>
+                <button id="btn-auth-action" class="btn-primary" style="width: 100%;" onclick="procesarAuth()">Entrar</button>
+            </div>
         </div>
     </div>
 
+    <!-- NAVEGACIÓN -->
     <nav class="navbar" id="main-nav" style="display: none;">
         <div class="logo" onclick="irAInicio()">🍬 Mata Tu Ansiedad</div>
-        <div class="bcv-info">Tasa Oficial BCV: <strong id="tasa-bcv-display">Cargando...</strong> Bs.</div>
-        <div class="search-bar" id="search-container"><input type="text" id="input-search" placeholder="Buscar antojito..."></div>
+        
+        <div class="bcv-info">
+            Tasa Oficial BCV: <strong id="tasa-bcv-display">Cargando...</strong> Bs.
+        </div>
+
+        <div class="search-bar" id="search-container">
+            <input type="text" id="input-search" placeholder="Buscar antojito...">
+        </div>
         <ul class="nav-links">
             <li class="user-menu">
                 <button id="btn-user-dropdown" class="btn-text" onclick="toggleUserMenu()">👤 Mi Cuenta ▼</button>
-                <div id="user-dropdown" class="dropdown-content"></div>
+                <div id="user-dropdown" class="dropdown-content">
+                    <!-- Se inyecta por JS -->
+                </div>
             </li>
             <li class="cart-icon" id="btn-cart-nav" onclick="abrirCarrito()">🛒 <span id="cart-count">0</span></li>
         </ul>
     </nav>
 
+    <!-- CATÁLOGO PRINCIPAL -->
     <div id="store-content" class="container" style="display: none;">
-        <div id="category-filters" class="category-bar"></div>
         <h2 class="section-title">Nuestros Antojos Disponibles</h2>
-        <div id="search-error" style="display: none; text-align: center; color: #666; margin-top: 20px;">No encontramos ese producto o categoría :(</div>
+        <div id="search-error" style="display: none; text-align: center; color: #666;">No encontramos ese producto :(</div>
         <div id="product-grid" class="grid"></div>
     </div>
 
+    <!-- PANTALLA DE CHECKOUT -->
     <div id="checkout-page" class="container" style="display: none;">
         <button class="btn-text" onclick="irAInicio()">← Volver a la tienda</button>
         <div class="checkout-grid">
@@ -112,12 +98,25 @@
                 <input type="text" id="chk-nombres" class="input-form" placeholder="Nombres" disabled>
                 <input type="text" id="chk-apellidos" class="input-form" placeholder="Apellidos" disabled>
                 <input type="text" id="chk-ubicacion" class="input-form" placeholder="Área de Trabajo" disabled>
+                
                 <h3 style="margin-top: 20px;">💳 Método de Pago</h3>
-                <select id="chk-metodo" class="input-form">
-                    <option value="contado">De Contado (Precio Base)</option>
+                <select id="chk-metodo" class="input-form" onchange="togglePagoMovil(); renderResumenCheckout();">
+                    <option value="contado">De Contado (Pago Móvil / Transferencia)</option>
                     <option value="credito">Crédito Quincena (+20%)</option>
                 </select>
+
+                <!-- Zona dinámica para datos bancarios y referencia -->
+                <div id="area-referencia">
+                    <div style="background: #e0f2fe; padding: 10px; border-radius: 8px; margin-bottom: 15px; font-size: 0.85rem; border: 1px solid #bae6fd;">
+                        <strong style="color: #0284c7;">📲 Datos de Pago Móvil:</strong><br>
+                        Banco: Mercantil (0105)<br>
+                        Cédula: V-12.345.678<br>
+                        Teléfono: 0412-0000000
+                    </div>
+                    <input type="text" id="chk-referencia" class="input-form" placeholder="N° de Referencia (Últimos 4 o 6 dígitos)">
+                </div>
             </div>
+            
             <div class="checkout-box">
                 <h3>🛒 Resumen a pagar</h3>
                 <div id="chk-resumen-lista"></div>
@@ -128,100 +127,51 @@
         </div>
     </div>
 
-    <!-- PANEL ADMINISTRATIVO -->
+    <!-- PANTALLA PANEL ADMIN -->
     <div id="admin-page" class="container" style="display: none;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap:10px;">
-            <h2 style="font-weight: 900; color: var(--text-main); display: flex; align-items: center; gap: 10px;">
-                ⚙️ Panel Administrativo
-                <button id="btn-admin-refresh" class="btn-text" style="font-size:1.2rem; padding: 0 5px;" title="Actualizar Datos" onclick="sincronizarAdminManual()">🔄</button>
-                <div id="admin-bell" style="font-size:1.4rem; cursor:pointer; position:relative; padding: 0 5px;" title="Ver Nuevos Pedidos" onclick="limpiarCampana()">
-                    🔔<span id="bell-badge" style="display:none; position:absolute; top:-5px; right:-2px; background:#EF4444; color:white; border-radius:50%; padding:2px 6px; font-size:0.7rem; font-weight:bold;">0</span>
-                </div>
-            </h2>
-            
-            <div style="display:flex; gap:10px; flex-wrap: wrap;">
-                <!-- 🔥 NUEVOS BOTONES DE DASHBOARD E INVERSIONES 🔥 -->
-                <button class="btn-primary" style="padding:8px 15px; font-size:0.9rem; background:#4F46E5;" onclick="cambiarSeccionAdmin('dashboard')">📈 Dashboard</button>
-                <button class="btn-primary" style="padding:8px 15px; font-size:0.9rem; background:#E11D48;" onclick="cambiarSeccionAdmin('inversiones')">🧾 Inversiones</button>
-                
+            <h2 style="font-weight: 900; color: var(--text-main);">⚙️ Panel Administrativo</h2>
+            <div style="display:flex; gap:10px;">
                 <button class="btn-primary" style="padding:8px 15px; font-size:0.9rem;" onclick="cambiarSeccionAdmin('inventario')">📦 Inventario</button>
                 <button class="btn-primary" style="padding:8px 15px; font-size:0.9rem; background:#3B82F6;" onclick="cambiarSeccionAdmin('pedidos')">🧾 Pedidos</button>
-                <button class="btn-primary" style="padding:8px 15px; font-size:0.9rem; background:#10B981;" onclick="cambiarSeccionAdmin('usuarios')">👥 Usuarios</button>
-                <button class="btn-primary" style="padding:8px 15px; font-size:0.9rem; background:#F59E0B;" onclick="cambiarSeccionAdmin('deudas')">💰 Deudas</button>
-                <button class="btn-primary" style="padding:8px 15px; font-size:0.9rem; background:#06B6D4;" onclick="cambiarSeccionAdmin('reportes')">📊 Reportes CSV</button>
                 <button class="btn-primary" style="padding:8px 15px; font-size:0.9rem; background:#8B5CF6;" onclick="cambiarSeccionAdmin('config')">⚙️ Ajustes</button>
             </div>
         </div>
-
-        <!-- 🔥 NUEVA PESTAÑA: DASHBOARD GRÁFICO 🔥 -->
-        <div id="admin-seccion-dashboard" style="display:none;">
-            <div class="modern-card animate-entry" style="margin-bottom: 20px;">
-                <h3 style="color:var(--primary); margin-bottom:15px;">📊 Rendimiento Financiero (Últimos 15 Días)</h3>
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
-                    <div style="background:#E0E7FF; padding:15px; border-radius:10px; border-left:4px solid #4F46E5;">
-                        <h4 style="color:#4F46E5; margin-bottom:5px;">Ingresos Brutos</h4>
-                        <h2 id="dash-ventas-15" style="color:#333;">$0.00</h2>
-                    </div>
-                    <div style="background:#D1FAE5; padding:15px; border-radius:10px; border-left:4px solid #10B981;">
-                        <h4 style="color:#10B981; margin-bottom:5px;">Ganancia Neta (Pura)</h4>
-                        <h2 id="dash-ganancia-15" style="color:#333;">$0.00</h2>
-                    </div>
-                    <div style="background:#FFE4E6; padding:15px; border-radius:10px; border-left:4px solid #E11D48;">
-                        <h4 style="color:#E11D48; margin-bottom:5px;">Total Invertido Histórico</h4>
-                        <h2 id="dash-inversiones" style="color:#333;">$0.00</h2>
-                    </div>
-                    <div style="background:#FEF3C7; padding:15px; border-radius:10px; border-left:4px solid #F59E0B;">
-                        <h4 style="color:#F59E0B; margin-bottom:5px;">ROI (Retorno)</h4>
-                        <h2 id="dash-roi" style="color:#333;">0%</h2>
-                    </div>
-                </div>
-                <!-- Gráfico de Ventas de los últimos 7 días -->
-                <div style="position: relative; height: 350px; width: 100%;">
-                    <canvas id="ventasChart"></canvas>
-                </div>
-            </div>
-        </div>
-
-        <!-- 🔥 NUEVA PESTAÑA: INVERSIONES / COMPRAS 🔥 -->
-        <div id="admin-seccion-inversiones" style="display:none;">
-            <div class="modern-card animate-entry" style="margin-bottom: 20px;">
-                <h3 style="color:var(--primary); margin-bottom:15px;">💸 Registro de Inversiones a Proveedores</h3>
-                <div class="modern-form-grid">
-                    <div class="input-group"><input type="date" id="inv-fecha" required><label>Fecha de Compra</label></div>
-                    <div class="input-group"><input type="text" id="inv-factura" required><label>N° Factura / Recibo</label></div>
-                    <div class="input-group"><input type="text" id="inv-desc" required><label>Descripción (Ej. Makro, Proveedor)</label></div>
-                    <div class="input-group"><input type="number" id="inv-monto" step="0.10" required><label>Monto Invertido (USD)</label></div>
-                </div>
-                <button type="button" class="btn-primary btn-large" style="background:#E11D48;" onclick="guardarInversionAdmin()">💾 Registrar Inversión / Gasto</button>
-            </div>
-            <div class="checkout-box animate-entry" style="overflow-x: auto; padding:0;">
-                <table class="admin-table">
-                    <thead style="background: #E11D48; color: white;"><tr><th>Fecha</th><th>N° Factura</th><th>Descripción</th><th>Monto Invertido</th></tr></thead>
-                    <tbody id="admin-inversiones-list"></tbody>
-                </table>
-            </div>
-        </div>
         
+        <!-- SECCIÓN 1: INVENTARIO Y CREACIÓN DE PRODUCTOS -->
         <div id="admin-seccion-inventario">
             <div class="modern-card animate-entry" style="margin-bottom: 30px;">
                 <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px;">
                     <span style="font-size: 1.5rem;">✨</span>
                     <h3 style="color: var(--primary); margin: 0; font-size: 1.3rem;">Agregar Nuevo Producto</h3>
                 </div>
+                
                 <div class="modern-form-grid">
-                    <div class="input-group"><input type="text" id="admin-add-nombre" required><label>Nombre del Producto</label></div>
+                    <div class="input-group">
+                        <input type="text" id="admin-add-nombre" required>
+                        <label>Nombre del Producto</label>
+                    </div>
+                    
                     <div class="input-group">
                         <select id="admin-add-cat" onchange="verificarNuevaCategoria('admin-add-cat', 'grupo-nueva-cat')" required></select>
                         <label style="top: -8px; left: 10px; font-size: 0.75rem; background: #fff; padding: 0 5px; color: var(--primary);">Categoría</label>
                     </div>
-                    <div class="input-group" id="grupo-nueva-cat" style="display: none;"><input type="text" id="admin-add-new-cat"><label>Escribe la Nueva Categoría</label></div>
+
+                    <div class="input-group" id="grupo-nueva-cat" style="display: none;">
+                        <input type="text" id="admin-add-new-cat">
+                        <label>Escribe la Nueva Categoría</label>
+                    </div>
+
+                    <div class="input-group">
+                        <input type="number" id="admin-add-precio" step="0.10" required>
+                        <label>Precio (USD)</label>
+                    </div>
                     
-                    <!-- 🔥 NUEVO: CAMPO DE COSTO 🔥 -->
-                    <div class="input-group"><input type="number" id="admin-add-costo" step="0.10" required><label>Costo de Compra (Tu inversión USD)</label></div>
-                    
-                    <div class="input-group"><input type="number" id="admin-add-precio" step="0.10" required><label>Precio Venta Base (USD)</label></div>
-                    <div class="input-group"><input type="number" id="admin-add-stock" required><label>Stock Inicial</label></div>
-                    
+                    <div class="input-group">
+                        <input type="number" id="admin-add-stock" required>
+                        <label>Stock Inicial</label>
+                    </div>
+
                     <div style="grid-column: span 2; margin-top: 10px;">
                         <p style="font-size: 0.85rem; font-weight: bold; margin-bottom: 10px; color: var(--text-sub);">Imagen del Producto:</p>
                         <div style="display: flex; gap: 15px; margin-bottom: 10px;">
@@ -235,155 +185,164 @@
                             </div>
                         </div>
                         <p id="file-msg-text" style="font-size: 0.8rem; text-align: center; color: var(--text-sub); margin-bottom: 15px;">Ninguna imagen seleccionada</p>
-                        <div class="input-group"><input type="text" id="admin-add-img-url" placeholder="O pega un enlace de internet aquí (Opcional)"></div>
+                        
+                        <div class="input-group">
+                            <input type="text" id="admin-add-img-url" placeholder="O pega un enlace de internet aquí (Opcional)">
+                        </div>
                     </div>
                 </div>
-                <button type="button" id="btn-save-prod" class="btn-primary btn-large" onclick="agregarProductoAdmin()">💾 Guardar Producto en Catálogo</button>
+
+                <button id="btn-save-prod" class="btn-primary btn-large" onclick="agregarProductoAdmin()">💾 Guardar Producto en Catálogo</button>
             </div>
+
             <div class="checkout-box animate-entry" style="overflow-x: auto; padding: 0;">
                 <table class="admin-table">
-                    <thead style="background: var(--primary); color: white;"><tr><th>Producto</th><th>Costo / Precio Venta</th><th>Stock Actual</th><th style="text-align:center;">Acciones</th></tr></thead>
+                    <thead style="background: var(--primary); color: white;">
+                        <tr><th>Producto</th><th>Precio (USD / Bs)</th><th>Stock Actual</th><th style="text-align:center;">Acciones</th></tr>
+                    </thead>
                     <tbody id="admin-inventory-list"></tbody>
                 </table>
             </div>
         </div>
 
-        <!-- RESTO DEL CÓDIGO HTML DE PESTAÑAS (Igual) -->
+        <!-- SECCIÓN 2: PEDIDOS Y FACTURAS GLOBALES -->
         <div id="admin-seccion-pedidos" style="display:none;">
             <div class="checkout-box animate-entry" style="overflow-x: auto; padding:0;">
                 <table class="admin-table">
-                    <thead style="background: #3B82F6; color: white;"><tr><th>ID / Fecha</th><th>Cliente / Área</th><th>Detalle de Compra</th><th>Estados</th></tr></thead>
+                    <thead style="background: #3B82F6; color: white;">
+                        <tr><th>ID / Fecha</th><th>Cliente / Área</th><th>Monto / Modalidad</th><th>Estados</th></tr>
+                    </thead>
                     <tbody id="admin-orders-list"></tbody>
                 </table>
             </div>
         </div>
 
-        <div id="admin-seccion-usuarios" style="display:none;">
-            <div class="checkout-box animate-entry" style="overflow-x: auto; padding:0;">
-                <table class="admin-table">
-                    <thead style="background: #10B981; color: white;"><tr><th>Usuario</th><th>Contacto / Área</th><th>Estado</th><th style="text-align:center;">Acciones</th></tr></thead>
-                    <tbody id="admin-users-list"></tbody>
-                </table>
-            </div>
-        </div>
-
-        <div id="admin-seccion-deudas" style="display:none;">
-            <div class="checkout-box animate-entry" style="overflow-x: auto; padding:0;">
-                <table class="admin-table">
-                    <thead style="background: #F59E0B; color: white;"><tr><th>Cliente</th><th>Deuda Acumulada</th><th style="text-align:center;">Acción</th></tr></thead>
-                    <tbody id="admin-deudas-list"></tbody>
-                </table>
-            </div>
-        </div>
-
-        <div id="admin-seccion-reportes" style="display:none;">
-            <div class="modern-card animate-entry" style="margin-bottom: 20px; text-align: center;">
-                <h3 style="color:var(--primary); margin-bottom:10px;">📊 Contabilidad y Reportes</h3>
-                <p style="color:var(--text-sub); margin-bottom:15px;">Filtra por fechas para agrupar las finanzas y descargar tus reportes en Excel.</p>
-                <div style="display: flex; gap: 15px; justify-content: center; margin-bottom: 20px; flex-wrap: wrap;">
-                    <div style="display: flex; flex-direction: column; text-align: left;">
-                        <label style="font-size: 0.8rem; font-weight: bold; color: var(--text-sub);">Desde:</label>
-                        <input type="date" id="reporte-inicio" class="input-form" style="margin-bottom: 0;">
-                    </div>
-                    <div style="display: flex; flex-direction: column; text-align: left;">
-                        <label style="font-size: 0.8rem; font-weight: bold; color: var(--text-sub);">Hasta:</label>
-                        <input type="date" id="reporte-fin" class="input-form" style="margin-bottom: 0;">
-                    </div>
-                </div>
-                <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
-                    <button class="btn-primary btn-large" style="background:#8B5CF6; flex: 1; min-width: 150px;" onclick="renderAdminReportes()">🔍 Filtrar Pantalla</button>
-                    <button class="btn-primary btn-large" style="background:#10B981; flex: 1; min-width: 200px;" onclick="descargarPedidosCSV()">⬇️ Descargar Ventas (Detallado)</button>
-                    <button class="btn-primary btn-large" style="background:#06B6D4; flex: 1; min-width: 200px;" onclick="descargarPagosCSV()">⬇️ Descargar Pagos (Deudas)</button>
-                </div>
-            </div>
-            <div class="checkout-box animate-entry" style="overflow-x: auto; padding:0;">
-                <table class="admin-table">
-                    <thead style="background: #06B6D4; color: white;"><tr><th>Fecha de Pago</th><th>Cliente</th><th>Monto Pagado</th></tr></thead>
-                    <tbody id="admin-reportes-list"></tbody>
-                </table>
-            </div>
-        </div>
-
+        <!-- SECCIÓN 3: CONFIGURACIÓN -->
         <div id="admin-seccion-config" style="display:none;">
             <div class="modern-card animate-entry">
                 <h3 style="margin-bottom:15px; color:var(--primary);">🗓️ Configurar Días de Cobro Globales</h3>
                 <p style="font-size:0.9rem; color:#666; margin-bottom:20px;">Establece los días del mes en los que se activará automáticamente la alarma roja de cobro en el sistema para todos los usuarios.</p>
+                
                 <div class="modern-form-grid" style="grid-template-columns: 1fr 1fr;">
-                    <div class="input-group"><input type="number" id="cfg-dia-1" min="1" max="31" required><label>Día de Quincena 1</label></div>
-                    <div class="input-group"><input type="number" id="cfg-dia-2" min="1" max="31" required><label>Día de Quincena 2</label></div>
+                    <div class="input-group">
+                        <input type="number" id="cfg-dia-1" min="1" max="31" required>
+                        <label>Día de Quincena 1</label>
+                    </div>
+                    <div class="input-group">
+                        <input type="number" id="cfg-dia-2" min="1" max="31" required>
+                        <label>Día de Quincena 2</label>
+                    </div>
                 </div>
-                <button type="button" class="btn-primary btn-large" onclick="guardarDiasCobro()">💾 Actualizar Fechas de Cobro</button>
+                <button class="btn-primary btn-large" onclick="guardarDiasCobro()">💾 Actualizar Fechas de Cobro</button>
             </div>
         </div>
     </div>
 
-    <!-- Modales -->
+    <!-- ============================================== -->
+    <!-- MODALES VARIOS Y VENTANAS FLOTANTES -->
+    <!-- ============================================== -->
+    
+    <!-- MODAL EDITAR PRODUCTO (ADMIN) -->
     <div id="modal-admin-editar" class="modal">
         <div class="modal-content" style="max-width: 600px;">
             <span class="close" onclick="cerrarModales()">×</span>
             <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px;">
-                <span style="font-size: 1.5rem;">✏️</span><h3 style="color: var(--primary); margin: 0; font-size: 1.3rem;">Modificar Producto</h3>
+                <span style="font-size: 1.5rem;">✏️</span>
+                <h3 style="color: var(--primary); margin: 0; font-size: 1.3rem;">Modificar Producto</h3>
             </div>
+            
             <div class="modern-form-grid">
-                <div class="input-group"><input type="text" id="edit-nombre" required><label>Nombre del Producto</label></div>
+                <div class="input-group">
+                    <input type="text" id="edit-nombre" required>
+                    <label>Nombre del Producto</label>
+                </div>
+                
                 <div class="input-group">
                     <select id="edit-cat" onchange="verificarNuevaCategoria('edit-cat', 'grupo-nueva-cat-edit')" required></select>
                     <label style="top: -8px; left: 10px; font-size: 0.75rem; background: #fff; padding: 0 5px; color: var(--primary);">Categoría</label>
                 </div>
-                <div class="input-group" id="grupo-nueva-cat-edit" style="display: none;"><input type="text" id="edit-new-cat"><label>Escribe la Nueva Categoría</label></div>
+
+                <div class="input-group" id="grupo-nueva-cat-edit" style="display: none;">
+                    <input type="text" id="edit-new-cat">
+                    <label>Escribe la Nueva Categoría</label>
+                </div>
+
+                <div class="input-group">
+                    <input type="number" id="edit-precio" step="0.10" required>
+                    <label>Precio (USD)</label>
+                </div>
                 
-                <!-- 🔥 NUEVO: CAMPO COSTO EN EDICIÓN 🔥 -->
-                <div class="input-group"><input type="number" id="edit-costo" step="0.10" required><label>Costo (Inversión USD)</label></div>
-                
-                <div class="input-group"><input type="number" id="edit-precio" step="0.10" required><label>Precio (Venta USD)</label></div>
-                <div class="input-group" style="grid-column: span 2;"><input type="number" id="edit-stock" required><label>Stock Actual</label></div>
+                <div class="input-group">
+                    <input type="number" id="edit-stock" required>
+                    <label>Stock Actual</label>
+                </div>
             </div>
+
+            <!-- Previsualización de imagen actual -->
             <div style="text-align: center; margin-bottom: 15px;">
                 <p style="font-size: 0.85rem; font-weight: bold; color: var(--text-sub);">Imagen Actual:</p>
                 <img id="edit-img-preview" src="" style="width: 80px; height: 80px; object-fit: cover; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-top: 5px;">
             </div>
+
+            <!-- Zona de Carga de Imagen Editar -->
             <div style="margin-bottom: 10px;">
                 <p style="font-size: 0.85rem; font-weight: bold; margin-bottom: 10px; color: var(--text-sub);">¿Cambiar Imagen? (Opcional):</p>
                 <div style="display: flex; gap: 15px; margin-bottom: 10px;">
                     <div class="file-drop-area" style="flex: 1; padding: 15px;" onclick="document.getElementById('edit-img-gallery').click()">
-                        <span class="file-msg" style="font-size: 0.9rem;">🖼️ Abrir Galería</span><input type="file" id="edit-img-gallery" accept="image/*" style="display: none;" onchange="actualizarTextoFoto(this, 'Galería', 'edit-file-msg-text', 'edit-img-camera')">
+                        <span class="file-msg" style="font-size: 0.9rem;">🖼️ Abrir Galería</span>
+                        <input type="file" id="edit-img-gallery" accept="image/*" style="display: none;" onchange="actualizarTextoFoto(this, 'Galería', 'edit-file-msg-text', 'edit-img-camera')">
                     </div>
                     <div class="file-drop-area" style="flex: 1; padding: 15px;" onclick="document.getElementById('edit-img-camera').click()">
-                        <span class="file-msg" style="font-size: 0.9rem;">📸 Tomar Foto</span><input type="file" id="edit-img-camera" accept="image/*" capture="environment" style="display: none;" onchange="actualizarTextoFoto(this, 'Cámara', 'edit-file-msg-text', 'edit-img-gallery')">
+                        <span class="file-msg" style="font-size: 0.9rem;">📸 Tomar Foto</span>
+                        <input type="file" id="edit-img-camera" accept="image/*" capture="environment" style="display: none;" onchange="actualizarTextoFoto(this, 'Cámara', 'edit-file-msg-text', 'edit-img-gallery')">
                     </div>
                 </div>
                 <p id="edit-file-msg-text" style="font-size: 0.8rem; text-align: center; color: var(--text-sub); margin-bottom: 15px;">Mantendremos la imagen actual si no seleccionas otra.</p>
-                <div class="input-group"><input type="text" id="edit-img-url" placeholder="O pega un enlace de internet aquí (Opcional)"></div>
+                
+                <div class="input-group">
+                    <input type="text" id="edit-img-url" placeholder="O pega un enlace de internet aquí (Opcional)">
+                </div>
             </div>
-            <button type="button" id="btn-update-prod" class="btn-primary btn-large" onclick="guardarEdicionAdmin()">🔄 Actualizar Producto</button>
+
+            <button id="btn-update-prod" class="btn-primary btn-large" onclick="guardarEdicionAdmin()">🔄 Actualizar Producto</button>
         </div>
     </div>
 
+    <!-- Modal Perfil y Facturas -->
     <div id="modal-perfil" class="modal">
         <div class="modal-content" style="max-width: 500px;">
             <span class="close" onclick="cerrarModales()">×</span>
             <h2 style="color: var(--primary); margin-bottom: 10px;">👤 Mi Perfil</h2>
             <div id="perfil-info" style="background: var(--bg-color); padding: 15px; border-radius: 10px; margin-bottom: 20px;"></div>
+            
             <h3 style="margin-bottom: 10px;">🧾 Mi Historial de Facturas</h3>
             <div id="perfil-facturas" style="max-height: 250px; overflow-y: auto; border: 1px solid #eee; padding: 10px; border-radius: 8px;"></div>
         </div>
     </div>
 
+    <!-- Modal Carrito -->
     <div id="modal-carrito" class="modal">
         <div class="modal-content">
             <span class="close" onclick="cerrarModales()">×</span>
             <h2>Tu Carrito</h2>
             <div id="cart-items"></div>
-            <div class="sugerencias-box"><h4>💡 Te sugerimos agregar:</h4><div id="cart-suggestions" class="sugerencias-grid"></div></div>
-            <div class="total-row total-final" style="margin-top: 20px;"><span>Total Estimado (USD):</span><span id="cart-total-usd">$0.00</span></div>
-            <button type="button" class="btn-primary" onclick="irACheckout()" style="width: 100%; margin-top: 15px;">Ir a Pagar</button>
+            <div class="sugerencias-box">
+                <h4>💡 Te sugerimos agregar:</h4>
+                <div id="cart-suggestions" class="sugerencias-grid"></div>
+            </div>
+            <div class="total-row total-final" style="margin-top: 20px;">
+                <span>Total Estimado (USD):</span><span id="cart-total-usd">$0.00</span>
+            </div>
+            <button class="btn-primary" onclick="irACheckout()" style="width: 100%; margin-top: 15px;">Ir a Pagar</button>
         </div>
     </div>
 
+    <!-- Modal Ticket Fiscal -->
     <div id="modal-ticket" class="modal">
         <div class="modal-content ticket-fiscal" id="ticket-content"></div>
     </div>
 
+    <!-- Modal Detalle Imagen -->
     <div id="modal-detalle" class="modal">
         <div class="modal-content">
             <span class="close" onclick="cerrarModales()">×</span>

@@ -70,7 +70,7 @@ async function enviarBackend(datos) {
 // 2. Inicialización, API BCV y Expiración
 // ==========================================
 window.onload = async () => {
-    await cargarDatosBackend(); // 🔗 Trae los datos reales del Drive
+    await cargarDatosBackend(); 
     await obtenerTasaBCV(); 
     verificarAlarmaCobro(); 
     verificarExpiracionSesion();
@@ -93,8 +93,6 @@ window.onload = async () => {
         const filtrados = productos.filter(p => p.nombre.toLowerCase().includes(query));
         renderProductos(filtrados);
     });
-
-    document.getElementById('chk-metodo').addEventListener('change', renderResumenCheckout);
 };
 
 async function cargarDatosBackend() {
@@ -150,7 +148,7 @@ async function obtenerTasaBCV() {
 }
 
 // ==========================================
-// 3. Autenticación y Cookies
+// 3. Autenticación Segura y Cookies
 // ==========================================
 window.togglePassword = () => {
     const pwdInput = document.getElementById('auth-password');
@@ -184,7 +182,7 @@ window.generarYMostrarCodigoOTP = () => {
     temporizadorOTP = setTimeout(() => { t.remove(); }, 10000); 
 };
 
-window.procesarAuth = () => {
+window.procesarAuth = async () => {
     const btn = document.getElementById('btn-auth-action');
     const u = document.getElementById('auth-email').value.trim().toLowerCase();
     const p = document.getElementById('auth-password').value.trim();
@@ -213,9 +211,8 @@ window.procesarAuth = () => {
             const codeInput = document.getElementById('auth-code').value.trim();
             if (codeInput !== codigoGeneradoOTP) return showToast("🔒 Código incorrecto. Genera otro.");
 
-            // Enviar registro al backend
             enviarBackend({ action: 'registrarCliente', correo: datosTemporales.correo, clave: datosTemporales.clave, nombres: datosTemporales.nombres, apellidos: datosTemporales.apellidos, area: datosTemporales.area, telefono: datosTemporales.telefono });
-            window.clientesMTA.push({ correo: datosTemporales.correo, clave: datosTemporales.clave, estado: 'Activo' });
+            window.clientesMTA.push({ correo: datosTemporales.correo, estado: 'Activo' });
             localStorage.setItem(`acc_${datosTemporales.correo}`, JSON.stringify(datosTemporales));
             
             showToast("🎉 Cuenta creada. Inicia sesión.");
@@ -234,23 +231,50 @@ window.procesarAuth = () => {
         eraseCookie('mta_remember_pass');
     }
 
-    if (u === 'administrador@matatuansiedad.com' && p === 'admin1234') {
-        usuarioActivo = 'admin';
-        datosUsuario = { nombres: 'Administrador', apellidos: 'Maestro', rol: 'admin' };
+    btn.innerText = "⏳ Verificando...";
+    btn.style.pointerEvents = "none";
+
+    if (SCRIPT_URL === "URL_DE_TU_GOOGLE_APPS_SCRIPT_AQUI") {
+        if (u === 'administrador@matatuansiedad.com' && p === 'admin1234') {
+            usuarioActivo = 'admin';
+            datosUsuario = { nombres: 'Administrador', apellidos: 'Maestro', rol: 'admin' };
+            iniciarSesionSistema();
+            btn.innerText = "Entrar"; btn.style.pointerEvents = "auto";
+            return;
+        }
+        const cuentaLocal = localStorage.getItem(`acc_${u}`) ? JSON.parse(localStorage.getItem(`acc_${u}`)) : null;
+        if (!cuentaLocal) { showToast("❌ Usuario no encontrado (Modo Local)"); btn.innerText = "Entrar"; btn.style.pointerEvents = "auto"; return; }
+        if (cuentaLocal.clave !== p) { showToast("🔒 Contraseña incorrecta"); btn.innerText = "Entrar"; btn.style.pointerEvents = "auto"; return; }
+        
+        usuarioActivo = u; datosUsuario = cuentaLocal;
         iniciarSesionSistema();
+        btn.innerText = "Entrar"; btn.style.pointerEvents = "auto";
         return;
     }
 
-    const cuentaBackend = window.clientesMTA.find(c => c.correo === u);
-    const cuentaLocal = localStorage.getItem(`acc_${u}`) ? JSON.parse(localStorage.getItem(`acc_${u}`)) : null;
-    const cuenta = cuentaBackend || cuentaLocal;
+    try {
+        const formData = new URLSearchParams();
+        formData.append('action', 'login');
+        formData.append('correo', u);
+        formData.append('clave', p);
 
-    if (!cuenta) return showToast("❌ Usuario no encontrado");
-    if (cuenta.clave !== p) return showToast("🔒 Contraseña incorrecta");
-    if (cuentaBackend && cuentaBackend.estado === 'Bloqueado') return showToast(`🚫 Cuenta bloqueada. Motivo: ${cuentaBackend.motivo}`);
+        const response = await fetch(SCRIPT_URL, { method: 'POST', body: formData });
+        const result = await response.json();
 
-    usuarioActivo = u; datosUsuario = cuenta;
-    iniciarSesionSistema();
+        if (result.status === 'success') {
+            usuarioActivo = result.data.rol === 'admin' ? 'admin' : u;
+            datosUsuario = result.data;
+            iniciarSesionSistema();
+        } else {
+            showToast(result.message);
+        }
+    } catch(e) {
+        showToast("❌ Error de conexión con el servidor.");
+        console.error(e);
+    } finally {
+        btn.innerText = "Entrar";
+        btn.style.pointerEvents = "auto";
+    }
 };
 
 function iniciarSesionSistema() {
@@ -469,7 +493,7 @@ function renderSugerencias() {
 }
 
 // ==========================================
-// 6. Checkout y Creación de Factura Global
+// 6. Checkout y Pagos 
 // ==========================================
 window.irACheckout = () => {
     if(carrito.length === 0) return showToast("Agrega algo para calmar tu ansiedad.");
@@ -480,8 +504,18 @@ window.irACheckout = () => {
     document.getElementById('chk-nombres').value = datosUsuario.nombres;
     document.getElementById('chk-apellidos').value = datosUsuario.apellidos;
     document.getElementById('chk-ubicacion').value = datosUsuario.area;
+    
+    // Resetear campos de pago
+    document.getElementById('chk-metodo').value = 'contado';
+    document.getElementById('chk-referencia').value = '';
+    togglePagoMovil();
 
     renderResumenCheckout();
+};
+
+window.togglePagoMovil = () => {
+    const metodo = document.getElementById('chk-metodo').value;
+    document.getElementById('area-referencia').style.display = metodo === 'contado' ? 'block' : 'none';
 };
 
 window.irAInicio = () => {
@@ -516,14 +550,22 @@ window.finalizarCompra = () => {
     const a = document.getElementById('chk-apellidos').value;
     const u = document.getElementById('chk-ubicacion').value;
     const m = document.getElementById('chk-metodo').value;
+    const ref = document.getElementById('chk-referencia').value.trim();
     const { totalCobrarUsd, totalCobrarBs } = renderResumenCheckout();
+
+    // Validar referencia de pago
+    if (m === 'contado' && !ref) {
+        return showToast("⚠️ Por favor ingresa el número de referencia de tu pago.");
+    }
+
+    // Generar string descriptivo del método
+    let metodoFinal = m === 'contado' ? `Contado (Ref: ${ref})` : 'Crédito';
 
     carrito.forEach(item => {
         let prod = productos.find(p => p.id === item.id);
         if(prod) prod.stock -= item.qty;
     });
     localStorage.setItem('mta_productos', JSON.stringify(productos));
-    // Sincronizar stock con el backend
     enviarBackend({ action: 'sincronizarInventario', datosInventario: JSON.stringify(productos) });
 
     const esDeContado = (m === 'contado'); 
@@ -537,7 +579,7 @@ window.finalizarCompra = () => {
         area: u,
         items: [...carrito],
         totalUsd: totalCobrarUsd,
-        metodo: m,
+        metodo: metodoFinal, 
         pagado: esDeContado, 
         entregado: false
     };
@@ -545,7 +587,6 @@ window.finalizarCompra = () => {
     ordenesGlobales.unshift(nuevaFacturaGlobal);
     localStorage.setItem('mta_global_orders', JSON.stringify(ordenesGlobales));
     
-    // Registrar pedido en el backend
     enviarBackend({
         action: 'nuevaCompra',
         correo: usuarioActivo,
@@ -555,12 +596,12 @@ window.finalizarCompra = () => {
         pedido: JSON.stringify(nuevaFacturaGlobal)
     });
 
-    generarTicketHTML(n, a, u, m, totalCobrarUsd, totalCobrarBs, carrito);
+    generarTicketHTML(n, a, u, metodoFinal, totalCobrarUsd, totalCobrarBs, carrito);
     
     let txt = `🍬 *MATA TU ANSIEDAD - NUEVO PEDIDO*%0A%0A`;
     txt += `👤 *Cliente:* ${n} ${a}%0A`;
     txt += `📍 *Ubicación:* ${u}%0A`;
-    txt += `💳 *Pago:* ${m === 'contado' ? 'De Contado' : 'Crédito Quincena'}%0A%0A`;
+    txt += `💳 *Pago:* ${metodoFinal}%0A%0A`;
     txt += `*🛒 DETALLE:*%0A`;
     carrito.forEach(i => txt += `- ${i.nombre} (x${i.qty})%0A`);
     txt += `%0A💰 *TOTAL:* $${totalCobrarUsd.toFixed(2)} / ${totalCobrarBs.toFixed(2)} Bs.%0A%0A`;
