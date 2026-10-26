@@ -174,16 +174,12 @@
 
                     <div style="grid-column: span 2; margin-top: 10px;">
                         <p style="font-size: 0.85rem; font-weight: bold; margin-bottom: 10px; color: var(--text-sub);">Imagen del Producto:</p>
-                        <div style="display: flex; gap: 15px; margin-bottom: 10px;">
-                            <div class="file-drop-area" style="flex: 1; padding: 15px;" onclick="document.getElementById('admin-add-img-gallery').click()">
-                                <span class="file-msg" style="font-size: 0.9rem;">🖼️ Abrir Galería</span>
-                                <input type="file" id="admin-add-img-gallery" accept="image/*" style="display: none;" onchange="actualizarTextoFoto(this, 'Galería', 'file-msg-text', 'admin-add-img-camera')">
-                            </div>
-                            <div class="file-drop-area" style="flex: 1; padding: 15px;" onclick="document.getElementById('admin-add-img-camera').click()">
-                                <span class="file-msg" style="font-size: 0.9rem;">📸 Tomar Foto</span>
-                                <input type="file" id="admin-add-img-camera" accept="image/*" capture="environment" style="display: none;" onchange="actualizarTextoFoto(this, 'Cámara', 'file-msg-text', 'admin-add-img-gallery')">
-                            </div>
+                        
+                        <div class="file-drop-area" style="padding: 15px; margin-bottom: 10px; width: 100%;" onclick="document.getElementById('admin-add-img-gallery').click()">
+                            <span class="file-msg" style="font-size: 0.9rem;">📁 Abrir Galería o Carpeta</span>
+                            <input type="file" id="admin-add-img-gallery" accept="image/*" style="display: none;" onchange="actualizarTextoFoto(this, 'Galería', 'file-msg-text')">
                         </div>
+                        
                         <p id="file-msg-text" style="font-size: 0.8rem; text-align: center; color: var(--text-sub); margin-bottom: 15px;">Ninguna imagen seleccionada</p>
                         
                         <div class="input-group">
@@ -278,25 +274,19 @@
                 </div>
             </div>
 
-            <!-- Previsualización de imagen actual -->
             <div style="text-align: center; margin-bottom: 15px;">
                 <p style="font-size: 0.85rem; font-weight: bold; color: var(--text-sub);">Imagen Actual:</p>
                 <img id="edit-img-preview" src="" style="width: 80px; height: 80px; object-fit: cover; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-top: 5px;">
             </div>
 
-            <!-- Zona de Carga de Imagen Editar -->
             <div style="margin-bottom: 10px;">
                 <p style="font-size: 0.85rem; font-weight: bold; margin-bottom: 10px; color: var(--text-sub);">¿Cambiar Imagen? (Opcional):</p>
-                <div style="display: flex; gap: 15px; margin-bottom: 10px;">
-                    <div class="file-drop-area" style="flex: 1; padding: 15px;" onclick="document.getElementById('edit-img-gallery').click()">
-                        <span class="file-msg" style="font-size: 0.9rem;">🖼️ Abrir Galería</span>
-                        <input type="file" id="edit-img-gallery" accept="image/*" style="display: none;" onchange="actualizarTextoFoto(this, 'Galería', 'edit-file-msg-text', 'edit-img-camera')">
-                    </div>
-                    <div class="file-drop-area" style="flex: 1; padding: 15px;" onclick="document.getElementById('edit-img-camera').click()">
-                        <span class="file-msg" style="font-size: 0.9rem;">📸 Tomar Foto</span>
-                        <input type="file" id="edit-img-camera" accept="image/*" capture="environment" style="display: none;" onchange="actualizarTextoFoto(this, 'Cámara', 'edit-file-msg-text', 'edit-img-gallery')">
-                    </div>
+                
+                <div class="file-drop-area" style="padding: 15px; margin-bottom: 10px; width: 100%;" onclick="document.getElementById('edit-img-gallery').click()">
+                    <span class="file-msg" style="font-size: 0.9rem;">📁 Abrir Galería o Carpeta</span>
+                    <input type="file" id="edit-img-gallery" accept="image/*" style="display: none;" onchange="actualizarTextoFoto(this, 'Galería', 'edit-file-msg-text')">
                 </div>
+                
                 <p id="edit-file-msg-text" style="font-size: 0.8rem; text-align: center; color: var(--text-sub); margin-bottom: 15px;">Mantendremos la imagen actual si no seleccionas otra.</p>
                 
                 <div class="input-group">

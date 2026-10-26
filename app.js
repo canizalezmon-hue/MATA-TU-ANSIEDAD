@@ -2,6 +2,7 @@
 // 1. Variables Globales, API y Cookies
 // ==========================================
 const SCRIPT_URL = "URL_DE_TU_GOOGLE_APPS_SCRIPT_AQUI"; // <-- ¡REEMPLAZA ESTO CON TU URL DE GOOGLE SCRIPT!
+const IMGBB_API_KEY = "640a334d708f51a2d593faef18bf7df2"; // Clave de ImgBB para subir fotos ligeras
 
 let TASA_BCV = 36.50; 
 const NUMERO_LIDER_WHATSAPP = "584120000000"; 
@@ -175,11 +176,11 @@ window.generarYMostrarCodigoOTP = () => {
     const cont = document.getElementById('toast-container');
     const t = document.createElement('div'); 
     t.className = 'toast'; 
-    t.innerHTML = `📱 TU CÓDIGO MTA ES: <strong style="font-size:1.3rem;">${codigoGeneradoOTP}</strong><br><small style="font-weight:normal;">Desaparecerá en 10 segundos</small>`;
+    t.innerHTML = `📱 TU CÓDIGO MTA ES: <strong style="font-size:1.3rem;">${codigoGeneradoOTP}</strong><br><small style="font-weight:normal;">Desaparecerá en 20 segundos</small>`;
     cont.appendChild(t); 
 
     if (temporizadorOTP) clearTimeout(temporizadorOTP);
-    temporizadorOTP = setTimeout(() => { t.remove(); }, 10000); 
+    temporizadorOTP = setTimeout(() => { t.remove(); }, 20000); // Cambiado a 20 segundos
 };
 
 window.procesarAuth = async () => {
@@ -470,7 +471,10 @@ function renderContenidoCarrito() {
 window.cambiarCant = (index, delta) => {
     const item = carrito[index]; const original = productos.find(p => p.id === item.id);
     if (item.qty + delta > 0 && item.qty + delta <= original.stock) { item.qty += delta; }
-    else if (item.qty + delta === 0) { carrito.splice(index, 1); }
+    else if (item.qty + delta === 0) { 
+        carrito.splice(index, 1); 
+        showToast("🗑️ Producto eliminado del carrito"); // Nuevo Toast de UX
+    }
     actualizarIconoCarrito(); renderContenidoCarrito();
 };
 
@@ -505,7 +509,6 @@ window.irACheckout = () => {
     document.getElementById('chk-apellidos').value = datosUsuario.apellidos;
     document.getElementById('chk-ubicacion').value = datosUsuario.area;
     
-    // Resetear campos de pago
     document.getElementById('chk-metodo').value = 'contado';
     document.getElementById('chk-referencia').value = '';
     togglePagoMovil();
@@ -553,12 +556,10 @@ window.finalizarCompra = () => {
     const ref = document.getElementById('chk-referencia').value.trim();
     const { totalCobrarUsd, totalCobrarBs } = renderResumenCheckout();
 
-    // Validar referencia de pago
     if (m === 'contado' && !ref) {
         return showToast("⚠️ Por favor ingresa el número de referencia de tu pago.");
     }
 
-    // Generar string descriptivo del método
     let metodoFinal = m === 'contado' ? `Contado (Ref: ${ref})` : 'Crédito';
 
     carrito.forEach(item => {
@@ -633,7 +634,7 @@ function generarTicketHTML(nom, ape, ubi, metodo, tUsd, tBs, itemsTicket) {
 }
 
 // ==========================================
-// 7. Panel de Administrador Profesional
+// 7. Panel de Administrador Profesional (Con ImgBB)
 // ==========================================
 window.abrirPanelAdmin = () => {
     const dropdown = document.getElementById('user-dropdown');
@@ -722,37 +723,29 @@ window.eliminarProductoAdmin = (id) => {
     }
 };
 
-// COMPRESOR DE IMÁGENES
-window.actualizarTextoFoto = (input, origen, idMsg, idOtherInput) => {
+// INTEGRACIÓN CON IMGBB PARA FOTOS LIGERAS
+window.actualizarTextoFoto = (input, origen, idMsg) => {
     const msg = document.getElementById(idMsg);
     if(input.files && input.files[0]) {
-        msg.innerHTML = `✅ Foto lista (${origen}): ${input.files[0].name}`;
+        msg.innerHTML = `✅ Archivo listo: ${input.files[0].name}`;
         msg.style.color = "#10B981";
-        if (idOtherInput) document.getElementById(idOtherInput).value = '';
     }
 };
 
-window.procesarImagenLocal = (file) => {
-    return new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            const img = new Image();
-            img.onload = () => {
-                const canvas = document.createElement('canvas');
-                const MAX_WIDTH = 800; const MAX_HEIGHT = 800;
-                let width = img.width; let height = img.height;
-                if (width > height) { if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; } } 
-                else { if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; } }
-                
-                canvas.width = width; canvas.height = height;
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(img, 0, 0, width, height);
-                resolve(canvas.toDataURL('image/jpeg', 0.7)); 
-            };
-            img.src = e.target.result;
-        };
-        reader.readAsDataURL(file);
-    });
+window.subirImagenAImgBB = async (file) => {
+    const formData = new FormData();
+    formData.append("image", file);
+    try {
+        const res = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, {
+            method: "POST",
+            body: formData
+        });
+        const data = await res.json();
+        return data.data.url; // Retorna el enlace corto
+    } catch(e) {
+        console.error("Error subiendo a ImgBB:", e);
+        return null;
+    }
 };
 
 window.agregarProductoAdmin = async () => {
@@ -762,9 +755,7 @@ window.agregarProductoAdmin = async () => {
     const p = parseFloat(document.getElementById('admin-add-precio').value);
     const s = parseInt(document.getElementById('admin-add-stock').value);
     const urlImg = document.getElementById('admin-add-img-url').value.trim();
-    
     const fileGallery = document.getElementById('admin-add-img-gallery');
-    const fileCamera = document.getElementById('admin-add-img-camera');
 
     if (c === 'otra') {
         const nuevaCat = document.getElementById('admin-add-new-cat').value.trim();
@@ -776,15 +767,18 @@ window.agregarProductoAdmin = async () => {
         }
     }
 
-    let fileToUpload = null;
-    if (fileGallery.files && fileGallery.files[0]) fileToUpload = fileGallery.files[0];
-    else if (fileCamera.files && fileCamera.files[0]) fileToUpload = fileCamera.files[0];
-
     let finalImg = urlImg; 
-    if (fileToUpload) {
-        btnSave.innerText = "⏳ Procesando Foto...";
+    if (fileGallery.files && fileGallery.files[0]) {
+        btnSave.innerText = "⏳ Subiendo Imagen a la Nube...";
         btnSave.style.pointerEvents = "none";
-        finalImg = await procesarImagenLocal(fileToUpload);
+        const linkGenerado = await subirImagenAImgBB(fileGallery.files[0]);
+        if(linkGenerado) {
+            finalImg = linkGenerado;
+        } else {
+            btnSave.innerText = "💾 Guardar Producto en Catálogo";
+            btnSave.style.pointerEvents = "auto";
+            return showToast("❌ Error al subir la imagen. Intenta con un enlace.");
+        }
     }
 
     if(!n || isNaN(p) || isNaN(s) || !finalImg) {
@@ -802,7 +796,7 @@ window.agregarProductoAdmin = async () => {
         showToast("✨ Producto agregado exitosamente");
     } catch(err) {
         productos.shift();
-        showToast("❌ Memoria llena. Usa imágenes de URL en lugar de subir fotos pesadas.");
+        showToast("❌ Memoria llena.");
     }
     
     document.getElementById('admin-add-nombre').value = ''; 
@@ -810,7 +804,6 @@ window.agregarProductoAdmin = async () => {
     document.getElementById('admin-add-stock').value = ''; 
     document.getElementById('admin-add-img-url').value = '';
     document.getElementById('admin-add-img-gallery').value = '';
-    document.getElementById('admin-add-img-camera').value = '';
     document.getElementById('file-msg-text').innerHTML = 'Ninguna imagen seleccionada';
     document.getElementById('admin-add-new-cat').value = '';
     document.getElementById('grupo-nueva-cat').style.display = 'none';
@@ -847,7 +840,6 @@ window.abrirModalEditar = (id) => {
 
     document.getElementById('edit-img-preview').src = p.img;
     document.getElementById('edit-img-gallery').value = '';
-    document.getElementById('edit-img-camera').value = '';
     document.getElementById('edit-img-url').value = '';
     document.getElementById('edit-file-msg-text').innerHTML = 'Mantendremos la imagen actual si no seleccionas otra.';
     document.getElementById('edit-file-msg-text').style.color = "var(--text-sub)";
@@ -865,9 +857,7 @@ window.guardarEdicionAdmin = async () => {
     const precio = parseFloat(document.getElementById('edit-precio').value);
     const stock = parseInt(document.getElementById('edit-stock').value);
     const urlImg = document.getElementById('edit-img-url').value.trim();
-    
     const fileGallery = document.getElementById('edit-img-gallery');
-    const fileCamera = document.getElementById('edit-img-camera');
 
     if (c === 'otra') {
         const nuevaCat = document.getElementById('edit-new-cat').value.trim();
@@ -879,16 +869,19 @@ window.guardarEdicionAdmin = async () => {
         }
     }
 
-    let fileToUpload = null;
-    if (fileGallery && fileGallery.files && fileGallery.files[0]) fileToUpload = fileGallery.files[0];
-    else if (fileCamera && fileCamera.files && fileCamera.files[0]) fileToUpload = fileCamera.files[0];
-
     btnSave.innerText = "⏳ Procesando...";
     btnSave.style.pointerEvents = "none";
 
     let finalImg = urlImg; 
-    if (fileToUpload) {
-        finalImg = await procesarImagenLocal(fileToUpload);
+    if (fileGallery && fileGallery.files && fileGallery.files[0]) {
+        const linkGenerado = await subirImagenAImgBB(fileGallery.files[0]);
+        if(linkGenerado) {
+            finalImg = linkGenerado;
+        } else {
+            btnSave.innerText = "🔄 Actualizar Producto";
+            btnSave.style.pointerEvents = "auto";
+            return showToast("❌ Error al subir la imagen a la nube.");
+        }
     } else if (!urlImg) {
         finalImg = p.img; 
     }
@@ -912,7 +905,7 @@ window.guardarEdicionAdmin = async () => {
         document.getElementById('modal-admin-editar').style.display = 'none';
         renderAdminInventario();
     } catch(err) {
-        showToast("❌ Memoria llena. Usa imágenes de URL.");
+        showToast("❌ Memoria llena.");
     }
     
     btnSave.innerText = "🔄 Actualizar Producto";
